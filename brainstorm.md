@@ -31,6 +31,34 @@ The George Washington University — Global Food Institute
 - **Operations**: Who applies labels / confirms markdowns in-store?
 - **Guardrails**: Minimum price thresholds, anti-gouging rules, and SNAP/WIC considerations.
 
+**Hardware (current inventory / ordered)**
+
+**Ordered (confirmed)**
+- **Core system**
+  - Elegoo UNO R3 starter kit (Arduino compatible)
+  - Inland ESP32-WROOM-32D module (recommended as main board for MVP due to Wi‑Fi)
+- **Sensors (inputs)**
+  - Inland electronic scale kit: **5kg load cell + HX711**
+  - Inland **CCS811** air quality sensor module (VOC/CO2 equivalent; exploratory signal)
+- **Output / interface**
+  - Inland **2-channel 5V relay** module
+- **Wiring**
+  - Inland Dupont jumper wires (20cm, 3 pack)
+
+**Not yet confirmed (still needed / optional for MVP)**
+- **Temp/humidity sensor** (for storage conditions). If you have DHT11 already, it can work for first tests; otherwise consider DHT22/SHT31/BME280 later.
+- **LCD display** (+ optional I2C backpack to simplify wiring) and/or LEDs for a simple in-store UI.
+- **Breadboard** (if not included in the Uno kit) for quick prototyping.
+
+**Hardware notes / gaps to fill**
+- **Timekeeping**: either use **Wi‑Fi/NTP (ESP32)** or add an **RTC module** for stable timestamps.
+- **Item identification**: need a low-friction way to tie readings to an item/lot (QR/barcode scan, NFC, or simple manual selection).
+- **Data logging** (optional but useful): microSD module or Wi‑Fi upload to the software backend.
+
+**Recommended “minimum viable hardware MVP” (fastest to demo)**
+- **ESP32 + Load cell + HX711 + temp/humidity sensor + LCD**
+- Use **weight trend + storage conditions (temp/humidity) + delivery date** to compute a simple shelf-life score and show a **markdown tier / recommended price** on the LCD (later sync to the app/POS).
+
 ## Opportunity Areas
 
 ### 1) Technology for Healthy Inventory
