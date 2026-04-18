@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Store Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container">
+        <div class="topbar__title">
+          <div class="topbar__kicker">Corner Store</div>
+          <h1>Owner Dashboard</h1>
+          <div class="topbar__meta">
+            <span class="pill">{{ store["name"] if store else "Store" }}</span>
+            {% if store and store["address"] %}
+              <span class="muted">{{ store["address"] }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('seed_demo') }}" class="topbar__actions">
+          <button class="button button--ghost" type="submit">Seed demo data</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container stack">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <section class="stack">
+            {% for category, message in messages %}
+              <div class="toast toast--{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </section>
+        {% endif %}
+      {% endwith %}
+
+      <section class="grid-2">
+        <div class="panel">
+          <div class="panel__header-row">
+            <div class="panel__header-row-left">
+              <h2>SKU catalog</h2>
+              <p class="muted">Pure product (SKU) info. Lots/readings live in the inventory table below.</p>
+            </div>
+            <form method="get" action="{{ url_for('dashboard') }}" class="panel__header-row-right">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              {% if selected_food_item_id %}
+                <input type="hidden" name="food_item_id" value="{{ selected_food_item_id }}" />
+              {% endif %}
+              <label class="inline-field">
+                <div class="label">Product type</div>
+                <select name="department" onchange="this.form.submit()">
+                  <option value="" {% if not selected_department %}selected{% endif %}>All</option>
+                  {% for d in departments %}
+                    <option value="{{ d }}" {% if selected_department == d %}selected{% endif %}>{{ d }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label class="inline-field">
+                <div class="label">Sort</div>
+                <select name="sku_sort" onchange="this.form.submit()">
+                  <option value="created" {% if sku_sort == 'created' %}selected{% endif %}>Newest</option>
+                  <option value="department" {% if sku_sort == 'department' %}selected{% endif %}>Department</option>
+                </select>
+              </label>
+            </form>
+          </div>
+
+          <div class="table-scroll">
+            <div class="table table--sku">
+              <div class="table__row table__row--head">
+                <div>Item</div>
+                <div>Department</div>
+                <div>Base price</div>
+                <div>Lots</div>
+                <div>Picture</div>
+                <div>Barcode</div>
+                <div>Number</div>
+              </div>
+
+              {% if skus|length == 0 %}
+                <div class="empty">
+                  <div class="empty__title">No SKUs yet</div>
+                  <div class="empty__body">Add an item on the right, or click “Seed demo data”.</div>
+                </div>
+              {% endif %}
+
+              {% for r in skus %}
+                <div class="table__row">
+                  <div class="mono" title="{{ r.item_name }}">{{ r.item_name_short }}</div>
+                  <div>{{ r.department if r.department else "—" }}</div>
+                  <div class="mono">
+                    {% if r.base_price is none %}
+                      <span class="muted">—</span>
+                    {% else %}
+                      ${{ "%.2f"|format(r.base_price) }}
+                    {% endif %}
+                  </div>
+                  <div class="mono">{{ r.total_lots }}</div>
+                  <div>
+                    {% if r.image_url %}
+                      <img class="sku-img" src="{{ r.image_url }}" alt="{{ r.item_name }}" />
+                    {% else %}
+                      <div class="sku-img sku-img--placeholder">—</div>
+                    {% endif %}
+                  </div>
+                  <div class="mono">{% if r.barcode %}{{ r.barcode }}{% else %}<span class="muted">—</span>{% endif %}</div>
+                  <div class="mono">{% if r.sku_number %}{{ r.sku_number }}{% else %}<span class="muted">—</span>{% endif %}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="panel__divider"></div>
+
+          <div class="panel__header-row">
+            <div class="panel__header-row-left">
+              <h2>Inventory + markdown recommendations</h2>
+              <p class="muted">
+                This mirrors the brainstorm workflow: track lots + sensor signals, then recommend markdowns with guardrails.
+              </p>
+            </div>
+            <form method="get" action="{{ url_for('dashboard') }}" class="panel__header-row-right">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              <input type="hidden" name="sku_sort" value="{{ sku_sort }}" />
+              {% if selected_department %}
+                <input type="hidden" name="department" value="{{ selected_department }}" />
+              {% endif %}
+              <label class="inline-field">
+                <div class="label">Product</div>
+                <select name="food_item_id" onchange="this.form.submit()">
+                  <option value="" {% if not selected_food_item_id %}selected{% endif %}>All</option>
+                  {% for p in product_options %}
+                    <option value="{{ p['id'] }}" {% if selected_food_item_id == p['id'] %}selected{% endif %}>
+                      {{ p['name'] }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
+            </form>
+          </div>
+
+          <div class="table-scroll">
+            <div class="table table--inventory">
+            <div class="table__row table__row--head">
+              <div>Lot</div>
+              <div>Expires</div>
+              <div>Days left</div>
+              <div>Latest weight</div>
+              <div>Recommendation</div>
+            </div>
+
+            {% if inventory_rows|length == 0 %}
+              <div class="empty">
+                <div class="empty__title">No items yet</div>
+                <div class="empty__body">Add an item on the right, or click “Seed demo data”.</div>
+              </div>
+            {% endif %}
+
+            {% for r in inventory_rows %}
+              <div class="table__row">
+                <div class="mono">
+                  {{ r.lot_code }}
+                </div>
+
+                <div class="mono">
+                  {% if r.expires_at_human %}
+                    {{ r.expires_at_human }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.days_left is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ r.days_left }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.latest_weight_g is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ "%.0f"|format(r.latest_weight_g) }} g
+                  {% endif %}
+                </div>
+
+                <div class="rec">
+                  <span class="badge badge--{{ r.rec_status }}">{{ r.rec_label }}</span>
+                  <div class="rec__price">
+                    {% if r.recommended_price is none %}
+                      <span class="muted">—</span>
+                    {% else %}
+                      <span class="mono">${{ "%.2f"|format(r.recommended_price) }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <section class="panel">
+            <div class="panel__header">
+              <h2>Add item</h2>
+              <p class="muted">Create a SKU and set its normal (base) price.</p>
+            </div>
+            <form class="form" method="post" action="{{ url_for('create_item') }}">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              <label>
+                <div class="label">Name</div>
+                <input name="name" placeholder="e.g., Bananas" required />
+              </label>
+              <label>
+                <div class="label">Description</div>
+                <input name="description" placeholder="Produce / Dairy / etc." />
+              </label>
+              <label>
+                <div class="label">Department</div>
+                <select name="department">
+                  <option value="">Select…</option>
+                  <option value="Produce">Produce</option>
+                  <option value="Dairy">Dairy</option>
+                  <option value="Meat">Meat</option>
+                  <option value="Bakery">Bakery</option>
+                  <option value="Frozen">Frozen</option>
+                  <option value="Pantry">Pantry</option>
+                  <option value="Beverages">Beverages</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Barcode</div>
+                  <input name="barcode" placeholder="Optional" />
+                </label>
+                <label>
+                  <div class="label">SKU number</div>
+                  <input name="sku_number" placeholder="Optional" />
+                </label>
+              </div>
+              <label>
+                <div class="label">Picture URL</div>
+                <input name="image_url" placeholder="Optional (https://...)" />
+              </label>
+              <label>
+                <div class="label">Base price ($)</div>
+                <input name="price" inputmode="decimal" placeholder="0.99" />
+              </label>
+              <button class="button" type="submit">Add item</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel__header">
+              <h2>Create lot</h2>
+              <p class="muted">Represents a delivery batch with an expiry date.</p>
+            </div>
+            <form class="form" method="post" action="{{ url_for('create_lot') }}">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              <label>
+                <div class="label">Item</div>
+                <select name="food_item_id" required>
+                  <option value="">Select an item…</option>
+                  {% for fi in food_items %}
+                    <option value="{{ fi['id'] }}">{{ fi['name'] }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                <div class="label">Lot ID</div>
+                <input name="lot_code" placeholder="e.g., A12, BAN-042" required />
+              </label>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Received</div>
+                  <input name="received_at" type="datetime-local" />
+                </label>
+                <label>
+                  <div class="label">Expires</div>
+                  <input name="expires_at" type="datetime-local" />
+                </label>
+              </div>
+              <label>
+                <div class="label">Quantity label</div>
+                <input name="quantity_label" placeholder="e.g., 12-count, 1 case, 1 unit" />
+              </label>
+              <label>
+                <div class="label">Notes</div>
+                <input name="notes" placeholder="Optional" />
+              </label>
+              <button class="button" type="submit">Create lot</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel__header">
+              <h2>Log sensor reading</h2>
+              <p class="muted">Manual entry for now; later this comes from ESP32 (load cell, temp/humidity, CCS811).</p>
+            </div>
+            <form class="form" method="post" action="{{ url_for('create_reading') }}">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              <label>
+                <div class="label">Lot</div>
+                <select name="lot_id" required>
+                  <option value="">Select a lot…</option>
+                  {% for l in lots %}
+                    <option value="{{ l['id'] }}">{{ l['item_name'] }} ({{ l['lot_code'] if l['lot_code'] else ('#' ~ l['id']) }}) · {{ l['received_at_human'] }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Weight (g)</div>
+                  <input name="weight_g" inputmode="decimal" placeholder="1200" />
+                </label>
+                <label>
+                  <div class="label">VOC (ppb)</div>
+                  <input name="voc_ppb" inputmode="decimal" placeholder="450" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Temp (°C)</div>
+                  <input name="temp_c" inputmode="decimal" placeholder="4.0" />
+                </label>
+                <label>
+                  <div class="label">Humidity (%RH)</div>
+                  <input name="humidity_rh" inputmode="decimal" placeholder="55" />
+                </label>
+              </div>
+              <label>
+                <div class="label">Recorded at</div>
+                <input name="recorded_at" type="datetime-local" />
+              </label>
+              <button class="button" type="submit">Log reading</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel__header">
+              <h2>Pricing guardrails</h2>
+              <p class="muted">Sets min/max prices per item so markdowns stay fair.</p>
+            </div>
+            <form class="form" method="post" action="{{ url_for('upsert_pricing_rules') }}">
+              <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
+              <label>
+                <div class="label">Item</div>
+                <select name="food_item_id" required>
+                  <option value="">Select an item…</option>
+                  {% for fi in food_items %}
+                    <option value="{{ fi['id'] }}">{{ fi['name'] }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Min price ($)</div>
+                  <input name="min_price" inputmode="decimal" placeholder="0.50" />
+                </label>
+                <label>
+                  <div class="label">Max price ($)</div>
+                  <input name="max_price" inputmode="decimal" placeholder="4.99" />
+                </label>
+              </div>
+              <label>
+                <div class="label">Margin floor (%)</div>
+                <input name="margin_floor_pct" inputmode="decimal" placeholder="Optional" />
+              </label>
+              <button class="button" type="submit">Save guardrails</button>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+
