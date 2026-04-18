@@ -40,6 +40,9 @@ def _with_id(doc):
 @app.route('/receive-data', methods=['POST'])
 def receive_data():
     # Check if the request contains valid JSON
+
+    print("Incoming POST request received")
+    
     if request.is_json:
         data = request.get_json()  # Parse JSON data from request
         weight = data.get('weight')
