@@ -19,9 +19,12 @@
             {% endif %}
           </div>
         </div>
-        <form method="post" action="{{ url_for('seed_demo') }}" class="topbar__actions">
-          <button class="button button--ghost" type="submit">Seed demo data</button>
-        </form>
+        <div class="topbar__actions">
+          <form method="post" action="{{ url_for('seed_demo') }}">
+            <button class="button button--ghost" type="submit">Seed demo data</button>
+          </form>
+          <a class="button button--ghost" href="{{ url_for('logout') }}">Logout</a>
+        </div>
       </div>
     </header>
 

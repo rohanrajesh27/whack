@@ -1,7 +1,10 @@
-from flask import Flask, render_template, redirect, url_for, request, g, flash
+from flask import Flask, render_template, redirect, url_for, request, g, flash, session
 
+import os
 import sqlite3
 import datetime
+from functools import wraps
+from werkzeug.security import generate_password_hash
 
 app = Flask("app")
 FLASK_ENV = "development"
@@ -73,6 +76,11 @@ def init_db():
         # Create after ensuring the column exists (handles old DBs + fresh DBs)
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_food_items_barcode ON food_items(barcode)")
 
+    cursor.execute("PRAGMA table_info(users)")
+    users_cols = {row["name"] for row in cursor.fetchall()}
+    if users_cols and "password_hash" not in users_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+
     conn.commit()
     cursor.close()
 
@@ -80,6 +88,38 @@ def init_db():
 @app.before_request
 def _ensure_db():
     init_db()
+
+
+def login_required(view_func):
+    @wraps(view_func)
+    def _wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+        return view_func(*args, **kwargs)
+
+    return _wrapped
+
+
+def get_or_create_user(username, password=None):
+    uname = (username or "").strip() or "demo"
+    pw = password or "demo"
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE username = ?", (uname,))
+    row = cursor.fetchone()
+    if row is not None:
+        cursor.close()
+        return row["id"]
+
+    cursor.execute(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        (uname, generate_password_hash(pw)),
+    )
+    conn.commit()
+    user_id = cursor.lastrowid
+    cursor.close()
+    return user_id
 
 
 def parse_optional_float(value):
@@ -188,12 +228,46 @@ def get_or_create_default_store():
 
 @app.route('/')
 def home():
-    return redirect(url_for("dashboard"))
+    if session.get("user_id"):
+        store_id = session.get("store_id") or get_or_create_default_store()
+        session["store_id"] = store_id
+        return redirect(url_for("dashboard", store_id=store_id))
+    return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        if session.get("user_id"):
+            store_id = session.get("store_id") or get_or_create_default_store()
+            session["store_id"] = store_id
+            return redirect(url_for("dashboard", store_id=store_id))
+        return render_template("login.html")
+
+    username = request.form.get("username") or "demo"
+    password = request.form.get("password") or "demo"
+
+    # Demo behavior (for now): accept any credentials and proceed.
+    user_id = get_or_create_user(username=username, password=password)
+    session["user_id"] = user_id
+    store_id = get_or_create_default_store()
+    session["store_id"] = store_id
+    flash("Logged in (demo).", "success")
+    return redirect(url_for("dashboard", store_id=store_id))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "info")
+    return redirect(url_for("login"))
 
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
-    store_id = request.args.get("store_id", type=int) or get_or_create_default_store()
+    store_id = request.args.get("store_id", type=int) or session.get("store_id") or get_or_create_default_store()
+    session["store_id"] = store_id
     selected_department = (request.args.get("department") or "").strip() or None
     selected_food_item_id = request.args.get("food_item_id", type=int)
     sku_sort = (request.args.get("sku_sort") or "").strip() or "created"
@@ -400,6 +474,7 @@ def dashboard():
 
 
 @app.route("/items/new", methods=["POST"])
+@login_required
 def create_item():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     name = (request.form.get("name") or "").strip()
@@ -431,6 +506,7 @@ def create_item():
 
 
 @app.route("/lots/new", methods=["POST"])
+@login_required
 def create_lot():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     food_item_id = request.form.get("food_item_id", type=int)
@@ -471,6 +547,7 @@ def create_lot():
 
 
 @app.route("/readings/new", methods=["POST"])
+@login_required
 def create_reading():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     lot_id = request.form.get("lot_id", type=int)
@@ -507,6 +584,7 @@ def create_reading():
 
 
 @app.route("/pricing_rules/upsert", methods=["POST"])
+@login_required
 def upsert_pricing_rules():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     food_item_id = request.form.get("food_item_id", type=int)
@@ -537,6 +615,7 @@ def upsert_pricing_rules():
 
 
 @app.route("/seed_demo", methods=["POST"])
+@login_required
 def seed_demo():
     store_id = get_or_create_default_store()
     conn = get_connection()
@@ -587,4 +666,6 @@ def seed_demo():
     return redirect(url_for("dashboard", store_id=store_id))
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    host = os.getenv("FLASK_HOST", "0.0.0.0")
+    port = int(os.getenv("FLASK_PORT", "5000"))
+    app.run(host=host, port=port, debug=True)

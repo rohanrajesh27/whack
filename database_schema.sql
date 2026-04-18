@@ -6,6 +6,14 @@ CREATE TABLE IF NOT EXISTS stores (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table: users (basic login)
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Table: food_items
 CREATE TABLE IF NOT EXISTS food_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

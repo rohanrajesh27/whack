@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main class="auth-shell" data-mode="login">
+      <section class="auth-left">
+        <div class="auth-card">
+          <header class="auth-header">
+            <div class="auth-brand">
+              <span class="auth-mark"></span>
+              <div>
+                <div class="auth-kicker">VitalShelf</div>
+                <h1 class="auth-title">Welcome back</h1>
+              </div>
+            </div>
+
+            <div class="auth-toggle" role="tablist" aria-label="Authentication mode">
+              <button class="auth-tab is-active" type="button" data-set-mode="login" role="tab" aria-selected="true">
+                Login
+              </button>
+              <button class="auth-tab" type="button" data-set-mode="signup" role="tab" aria-selected="false">
+                Create account
+              </button>
+            </div>
+
+            <p class="muted auth-subtitle">
+              Demo mode: submitting either form logs you in and opens the store dashboard.
+            </p>
+          </header>
+
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              <section class="stack">
+                {% for category, message in messages %}
+                  <div class="toast toast--{{ category }}">{{ message }}</div>
+                {% endfor %}
+              </section>
+            {% endif %}
+          {% endwith %}
+
+          <div id="authError" class="auth-inline-error" aria-live="polite"></div>
+
+          <form id="authForm" method="post" action="{{ url_for('login') }}" class="auth-form" novalidate>
+            <input type="hidden" id="mode" name="mode" value="login" />
+
+            <div class="auth-forms">
+              <div class="auth-pane auth-pane--login" aria-hidden="false">
+                <div class="field">
+                  <label for="email">Email</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">@</span>
+                    <input
+                      id="email"
+                      name="username"
+                      autocomplete="username"
+                      inputmode="email"
+                      placeholder="demo@corner.store"
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="password">Password</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">●</span>
+                    <input id="password" name="password" type="password" autocomplete="current-password" placeholder="demo" />
+                  </div>
+                </div>
+
+                <div class="auth-row">
+                  <label class="check">
+                    <input type="checkbox" name="remember" />
+                    <span>Remember me</span>
+                  </label>
+                  <a class="link" href="#" data-forgot>Forgot password?</a>
+                </div>
+
+                <button class="button auth-cta" type="submit">Login</button>
+              </div>
+
+              <div class="auth-pane auth-pane--signup" aria-hidden="true">
+                <div class="field">
+                  <label for="full_name">Full name</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">✦</span>
+                    <input id="full_name" name="full_name" autocomplete="name" placeholder="Demo User" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="email2">Email</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">@</span>
+                    <input
+                      id="email2"
+                      name="username_signup"
+                      autocomplete="email"
+                      inputmode="email"
+                      placeholder="demo@corner.store"
+                    />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="password2">Password</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">●</span>
+                    <input id="password2" name="password_signup" type="password" autocomplete="new-password" placeholder="Create a password" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="password3">Confirm password</label>
+                  <div class="input-wrap">
+                    <span class="input-icon" aria-hidden="true">●</span>
+                    <input id="password3" name="confirm_password" type="password" autocomplete="new-password" placeholder="Repeat password" />
+                  </div>
+                </div>
+
+                <label class="check">
+                  <input id="terms" type="checkbox" name="terms" />
+                  <span>
+                    I agree to the <a class="link" href="#" data-terms>Terms of Service</a>
+                  </span>
+                </label>
+
+                <button class="button auth-cta" type="submit">Sign up</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="auth-right" aria-hidden="true">
+        <div class="media-panel">
+          <div class="media-slideshow" aria-hidden="true">
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1554486855-60050042cd53.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1561602535-7f155201c950.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1589483233144-795633bf597c.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1604200657090-ae45994b2451.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1665315302321-46989ca7829a.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/photo-1706828675754-6a2c46a56099.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/premium_photo-1674624682288-085eff4f98da.avif') }}"></div>
+            <div class="slide" data-src="{{ url_for('static', filename='images/premium_photo-1761846736140-de543068f472.avif') }}"></div>
+          </div>
+
+          <div class="media-overlay">
+            <h2>Track freshness.<br />Cut waste.</h2>
+            <p>Dynamic pricing to move food faster—before it spoils.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const shell = document.querySelector(".auth-shell");
+        const errorEl = document.getElementById("authError");
+        const modeInput = document.getElementById("mode");
+        const form = document.getElementById("authForm");
+
+        const slideshow = document.querySelector(".media-slideshow");
+        if (slideshow) {
+          const slides = Array.from(slideshow.querySelectorAll(".slide"));
+          // Shuffle slides to randomize the order each page load.
+          for (let i = slides.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [slides[i], slides[j]] = [slides[j], slides[i]];
+          }
+          slideshow.replaceChildren(...slides);
+          // Apply background images from data-src after shuffle.
+          slides.forEach((s) => {
+            const src = s.getAttribute("data-src");
+            if (src) s.style.backgroundImage = `url("${src}")`;
+          });
+        }
+
+        const loginPane = document.querySelector(".auth-pane--login");
+        const signupPane = document.querySelector(".auth-pane--signup");
+
+        function setMode(mode) {
+          const next = mode === "signup" ? "signup" : "login";
+          shell.dataset.mode = next;
+          modeInput.value = next;
+
+          document.querySelectorAll("[data-set-mode]").forEach((el) => {
+            const isActive = el.getAttribute("data-set-mode") === next;
+            if (el.classList.contains("auth-tab")) {
+              el.classList.toggle("is-active", isActive);
+              el.setAttribute("aria-selected", isActive ? "true" : "false");
+            }
+          });
+
+          loginPane.setAttribute("aria-hidden", next === "login" ? "false" : "true");
+          signupPane.setAttribute("aria-hidden", next === "signup" ? "false" : "true");
+          errorEl.textContent = "";
+        }
+
+        document.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-set-mode]");
+          if (btn) {
+            e.preventDefault();
+            setMode(btn.getAttribute("data-set-mode"));
+          }
+          const forgot = e.target.closest("[data-forgot]");
+          if (forgot) {
+            e.preventDefault();
+            errorEl.textContent = "Demo: password resets are not enabled yet.";
+          }
+          const terms = e.target.closest("[data-terms]");
+          if (terms) {
+            e.preventDefault();
+            errorEl.textContent = "Demo: terms page is not set up yet.";
+          }
+        });
+
+        form.addEventListener("submit", (e) => {
+          const mode = shell.dataset.mode || "login";
+          if (mode === "signup") {
+            const email = document.getElementById("email2").value.trim();
+            const pw = document.getElementById("password2").value;
+            const pw2 = document.getElementById("password3").value;
+            const terms = document.getElementById("terms").checked;
+
+            if (!email) {
+              e.preventDefault();
+              errorEl.textContent = "Please enter an email to create an account.";
+              return;
+            }
+            if (!pw || pw.length < 4) {
+              e.preventDefault();
+              errorEl.textContent = "Please choose a password (4+ characters for demo).";
+              return;
+            }
+            if (pw !== pw2) {
+              e.preventDefault();
+              errorEl.textContent = "Passwords don’t match.";
+              return;
+            }
+            if (!terms) {
+              e.preventDefault();
+              errorEl.textContent = "Please accept the Terms of Service to continue.";
+              return;
+            }
+
+            // Map signup email/password into backend fields (demo backend expects username/password)
+            const u = document.getElementById("email2").value;
+            const p = document.getElementById("password2").value;
+            document.getElementById("email").value = u;
+            document.getElementById("password").value = p;
+          } else {
+            const email = document.getElementById("email").value.trim();
+            if (!email) {
+              e.preventDefault();
+              errorEl.textContent = "Please enter an email.";
+            }
+          }
+        });
+
+        setMode("login");
+      })();
+    </script>
+  </body>
+</html>
