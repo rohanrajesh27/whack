@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify
 import os
 
 try:
@@ -36,6 +36,23 @@ def _with_id(doc):
     if "_id" in d:
         d["id"] = d.pop("_id")
     return d
+
+@app.route('/receive-data', methods=['POST'])
+def receive_data():
+    # Check if the request contains valid JSON
+    if request.is_json:
+        data = request.get_json()  # Parse JSON data from request
+        weight = data.get('weight')
+        message = data.get('message')
+
+        # Process the received data
+        print(f"Received weight: {weight}, message: {message}")
+
+        # Respond with success status
+        return jsonify(status='success', weight=weight, message=message), 200
+    else:
+        # Invalid request format
+        return jsonify(status='error', message='Request must be JSON'), 400
 
 
 @app.before_request
