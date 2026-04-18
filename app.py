@@ -22,6 +22,16 @@ import dc_grocery
 from mongo_db import get_mongo_db
 from db_mongo import alloc_id, init_mongo, now_ts
 
+
+from pymongo import MongoClient
+
+def get_mongo_db():
+    mongo_uri = os.getenv("MONGO_URI")
+    client = MongoClient(mongo_uri)
+    db = client.get_database()
+    return db
+
+
 app = Flask("app")
 FLASK_ENV = "development"
 app.secret_key = "CHANGE ME"
