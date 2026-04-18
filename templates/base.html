@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}{% endblock %}</title>
+    {% include "_favicon.html" %}
+    {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body{% block body_attrs %}{% endblock %}>
+    {% block content %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

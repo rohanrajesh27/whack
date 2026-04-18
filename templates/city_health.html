@@ -1,24 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VitalShelf — City health</title>
+{% extends "base.html" %}
+{% block title %}VitalShelf — City health{% endblock %}
+{% block body_attrs %} class="city-page"{% endblock %}
+{% block extra_head %}
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-  </head>
-  <body class="city-page">
+{% endblock %}
+{% block content %}
     <header class="topbar city-topbar">
       <div class="container">
         <div class="topbar__title">
@@ -141,7 +132,14 @@
         </div>
       </section>
     </main>
-
+{% endblock %}
+{% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
     <script id="city-metrics-json" type="application/json">{{ metrics | tojson }}</script>
     <script id="map-pins-json" type="application/json">{{ map_pins | tojson }}</script>
     <script id="map-meta-json" type="application/json">{{ map_meta | tojson }}</script>
@@ -510,5 +508,4 @@
         window.addEventListener("resize", refreshMapSize);
       })();
     </script>
-  </body>
-</html>
+{% endblock %}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Populate MongoDB with random data shaped like database_schema.sql tables.
+Populate MongoDB with random VitalShelf-shaped data (stores, users, SKUs, lots, readings, pricing).
 
-MongoDB does not execute .sql files; this script mirrors those collections:
+This script mirrors the app’s Mongo collections:
   stores, users, food_items, lots, sensor_readings, pricing_rules
 
 Usage (from project root):

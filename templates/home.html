@@ -1,16 +1,9 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Home</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  </head>
-  <body>
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
     <main class="card">
       <h1>Welcome</h1>
       <p>Please log in to continue.</p>
       <p><a class="button" href="{{ url_for('login') }}">Go to login</a>.</p>
     </main>
-  </body>
-</html>
+{% endblock %}

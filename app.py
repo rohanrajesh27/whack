@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, session
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
 
 try:
     from dotenv import load_dotenv
@@ -408,6 +408,11 @@ def _seed_store_catalog(store_id, variant_index):
 def _store_has_items(store_id):
     db = get_mongo_db()
     return db.food_items.count_documents({"store_id": store_id}) > 0
+
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html")
 
 
 @app.route('/')
@@ -851,6 +856,15 @@ def seed_demo():
     else:
         flash("Every store already has a catalog. No changes made.", "info")
     return redirect(url_for("dashboard", store_id=store_id))
+
+
+@app.route("/favicon.ico")
+def favicon():
+    # Real .ico (multi-size) — many browsers only accept this at /favicon.ico, not PNG-in-disguise.
+    response = send_from_directory(app.static_folder, "favicon.ico", mimetype="image/x-icon")
+    response.headers["Cache-Control"] = "public, max-age=86400, must-revalidate"
+    return response
+
 
 if __name__ == '__main__':
     host = os.getenv("FLASK_HOST", "0.0.0.0")

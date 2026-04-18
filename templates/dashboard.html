@@ -1,12 +1,6 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Store Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  </head>
-  <body>
+{% extends "base.html" %}
+{% block title %}Store Dashboard{% endblock %}
+{% block content %}
     <header class="topbar">
       <div class="container">
         <div class="topbar__title">
@@ -413,6 +407,5 @@
         </div>
       </section>
     </main>
-  </body>
-</html>
+{% endblock %}
 

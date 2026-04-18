@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service — VitalShelf{% endblock %}
+{% block content %}
+    <main class="terms-page">
+      <div class="terms-page__inner">
+        <p class="terms-page__back">
+          <a class="link" href="{{ url_for('login') }}">← Back to sign in</a>
+        </p>
+        <article class="card terms-card">
+          <h1>Terms of Service</h1>
+          <p class="terms-card__meta muted">Last updated: April 18, 2026 · Demo / educational product</p>
+
+          <h2>1. Agreement</h2>
+          <p>
+            By accessing or using VitalShelf (the “Service”), you agree to these Terms. If you do not agree, do not use the Service.
+          </p>
+
+          <h2>2. The Service</h2>
+          <p>
+            VitalShelf is a demonstration application for inventory, freshness, and pricing workflows. Features, data, and availability may
+            change at any time. The Service is not a substitute for professional, legal, or food-safety advice.
+          </p>
+
+          <h2>3. Accounts and security</h2>
+          <p>
+            You are responsible for activity under your account and for keeping credentials confidential. Notify us if you suspect
+            unauthorized use. In this demo environment, accounts and passwords may be simplified and are not production-grade security.
+          </p>
+
+          <h2>4. Your content</h2>
+          <p>
+            You retain rights to data you submit. You grant us a limited license to host, process, and display that data only as needed
+            to operate the Service. Do not submit unlawful, infringing, or harmful content.
+          </p>
+
+          <h2>5. Privacy</h2>
+          <p>
+            We process information as described in how the app is deployed (for example, authentication and database providers you
+            configure). This demo may use synthetic or sample data; do not enter real personal data you are not allowed to share.
+          </p>
+
+          <h2>6. Disclaimers</h2>
+          <p>
+            The Service is provided “as is” without warranties of any kind. We do not warrant uninterrupted or error-free operation or
+            that results will meet your requirements.
+          </p>
+
+          <h2>7. Limitation of liability</h2>
+          <p>
+            To the fullest extent permitted by law, VitalShelf and its operators will not be liable for indirect, incidental, special,
+            consequential, or punitive damages, or for loss of profits, data, or goodwill, arising from your use of the Service.
+          </p>
+
+          <h2>8. Changes</h2>
+          <p>
+            We may update these Terms. Continued use after changes constitutes acceptance of the revised Terms. The “Last updated” date
+            above will be revised when material changes are made.
+          </p>
+
+          <h2>9. Contact</h2>
+          <p>
+            For questions about these Terms, contact the person or organization operating this deployment of VitalShelf.
+          </p>
+
+          <p style="margin-top: 1.5rem">
+            <a class="button" href="{{ url_for('login') }}">Return to sign in</a>
+          </p>
+        </article>
+      </div>
+    </main>
+{% endblock %}
