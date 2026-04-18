@@ -1,13 +1,18 @@
--- SQLite schema for this project
--- Run automatically by app.py if the DB is empty.
-
-CREATE TABLE IF NOT EXISTS course (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  dept TEXT NOT NULL,
-  course_num TEXT NOT NULL,
-  title TEXT,
-  credits INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+-- Table: stores
+CREATE TABLE stores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_course_dept_num ON course(dept, course_num);
+-- Table: food_items
+CREATE TABLE food_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL,
+    store_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (store_id) REFERENCES stores(id)
+);
