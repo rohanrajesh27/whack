@@ -23,7 +23,7 @@ def send_data_to_server(url, weight, message):
         print(f"An error occurred: {e}")
 
 # Example usage
-url_to_send = "https://whack-wlr9.onrender.com"
+url_to_send = "https://whack-wlr9.onrender.com/receive-data"
 weight_value = 75.5  # Example weight
 text_message = "Hello, this is a test message"
 
