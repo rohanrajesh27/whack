@@ -1,0 +1,1406 @@
+{
+"pins": [
+{
+"lat": 38.80352,
+"lon": -76.95177,
+"name": "Sunoco",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.988783,
+"lon": -77.0954033,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8036303,
+"lon": -76.9533748,
+"name": "Jumbo Foods",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.991893,
+"lon": -77.031655,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9924398,
+"lon": -77.0308178,
+"name": "Metro Conv.",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9932003,
+"lon": -77.0311611,
+"name": "News & Valet",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9373316,
+"lon": -77.0890437,
+"name": "Eagle Express",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9903333,
+"lon": -77.099927,
+"name": "Cornucopia",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9924993,
+"lon": -77.0968733,
+"name": "Woodmont Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9453712,
+"lon": -77.0778046,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8128362,
+"lon": -77.112618,
+"name": "Harris Teeter",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8837515,
+"lon": -77.1029597,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9249001,
+"lon": -77.0519964,
+"name": "Manhattan Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9241523,
+"lon": -77.0522256,
+"name": "Grocery / corner store",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9053489,
+"lon": -77.0432258,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.89456,
+"lon": -77.02969,
+"name": "Capital Harvest",
+"shop": "greengrocer",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8993189,
+"lon": -77.0328651,
+"name": "New York Convenience",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9218478,
+"lon": -77.0383963,
+"name": "Harris Teeter",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9308461,
+"lon": -77.0318599,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9041925,
+"lon": -77.0531294,
+"name": "Trader Joe's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9186373,
+"lon": -77.0317099,
+"name": "Yes! Organic",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9094423,
+"lon": -77.0335553,
+"name": "Whole Foods Market",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.944499,
+"lon": -77.0631702,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9331586,
+"lon": -77.0853629,
+"name": "Wagshal's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9351083,
+"lon": -77.0579407,
+"name": "Yes! Organic",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.919222,
+"lon": -76.9924287,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9309584,
+"lon": -77.0385457,
+"name": "Best World",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9491011,
+"lon": -77.0792124,
+"name": "Whole Foods Market",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.934323,
+"lon": -77.0730461,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9217967,
+"lon": -77.0437087,
+"name": "Yes! Organic",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.965605,
+"lon": -77.0763186,
+"name": "Magruder's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9409973,
+"lon": -77.0255304,
+"name": "Yes! Organic Market",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9368165,
+"lon": -76.9903952,
+"name": "Yes! Organic",
+"shop": "greengrocer",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8450821,
+"lon": -76.9810368,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8933254,
+"lon": -76.9477203,
+"name": "Safeway",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9561559,
+"lon": -77.0837082,
+"name": "Rodmans Gourmet Grocery & Pharmacy",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9167673,
+"lon": -77.0411555,
+"name": "Virginia Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9264696,
+"lon": -77.0373262,
+"name": "Argonne Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9245758,
+"lon": -77.0401525,
+"name": "Colombia Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8258876,
+"lon": -77.0075506,
+"name": "Elmira Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8532728,
+"lon": -76.9644939,
+"name": "Southeast People's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8661743,
+"lon": -76.949811,
+"name": "Lee's Mini Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8289977,
+"lon": -76.9982902,
+"name": "Chesapeake Big Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8634589,
+"lon": -76.982449,
+"name": "Paramount Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8625781,
+"lon": -76.9923097,
+"name": "King's Mini Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8668584,
+"lon": -76.9867238,
+"name": "Marion Barry Avenue Market",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8763823,
+"lon": -76.9653711,
+"name": "Randall Grocery",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8894113,
+"lon": -76.9253064,
+"name": "Toni's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8621894,
+"lon": -76.9927795,
+"name": "Martin Luther King's Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8424062,
+"lon": -77.0030806,
+"name": "K & H Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.850669,
+"lon": -76.9737021,
+"name": "Alabama Grocery-Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8433866,
+"lon": -76.9975832,
+"name": "Liff's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8739132,
+"lon": -76.9343162,
+"name": "Bowen Discount",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8713203,
+"lon": -76.9745949,
+"name": "J & D Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8784712,
+"lon": -76.9311629,
+"name": "Dennies Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8651433,
+"lon": -76.951413,
+"name": "Penn Way Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8683778,
+"lon": -76.9589495,
+"name": "Patron Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8665147,
+"lon": -76.9848458,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8209499,
+"lon": -77.0107128,
+"name": "Fort Drum Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8651869,
+"lon": -76.9823569,
+"name": "Tony's Country Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8475854,
+"lon": -76.9713211,
+"name": "Shipley Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9656259,
+"lon": -77.0686241,
+"name": "The Broad Branch Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9225243,
+"lon": -77.0087296,
+"name": "Fairway Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9253535,
+"lon": -76.9715792,
+"name": "Langdon Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9194256,
+"lon": -77.0003155,
+"name": "New Star Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9254107,
+"lon": -76.9959258,
+"name": "Franklin Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9198948,
+"lon": -76.9716664,
+"name": "24",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9153018,
+"lon": -77.000995,
+"name": "McKinley Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9097813,
+"lon": -76.984811,
+"name": "Northeast Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9196188,
+"lon": -76.9997757,
+"name": "Sun Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9262253,
+"lon": -76.981265,
+"name": "New Neighborhood Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9615177,
+"lon": -77.0284286,
+"name": "Missouri Avenue Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9563573,
+"lon": -77.0328467,
+"name": "Gold Corner Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9687561,
+"lon": -77.0278294,
+"name": "Lena Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9513947,
+"lon": -77.0123645,
+"name": "Avenue Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9420603,
+"lon": -77.0242873,
+"name": "Town & Country Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9423547,
+"lon": -77.0151196,
+"name": "J&B Food Market and Hot Deli Kitchen",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9348606,
+"lon": -77.0207947,
+"name": "Gee's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.926123,
+"lon": -76.9958684,
+"name": "Brookland Supermarket & Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9382854,
+"lon": -77.0243745,
+"name": "7 Round Davis Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9296005,
+"lon": -77.0040949,
+"name": "Trinity Deli & Food Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9527521,
+"lon": -77.0272417,
+"name": "Georgia Line Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.930765,
+"lon": -77.0211675,
+"name": "Spruill's Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8776882,
+"lon": -76.9959531,
+"name": "7th & L Street Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9039764,
+"lon": -76.9810917,
+"name": "Mudrick's Supermarket",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8944231,
+"lon": -77.0022708,
+"name": "Capitol Hill Super Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8971951,
+"lon": -77.0022095,
+"name": "Union Kitchen 3rd",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9027699,
+"lon": -76.9986388,
+"name": "Old City Market and Oven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8782785,
+"lon": -77.0018587,
+"name": "Cornercopia",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8975407,
+"lon": -76.9959815,
+"name": "Adams Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9030389,
+"lon": -76.9903544,
+"name": "Darby's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.883082,
+"lon": -77.000825,
+"name": "Capitol Supreme Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8971712,
+"lon": -76.9947141,
+"name": "DC Supermarket",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9451727,
+"lon": -77.0784617,
+"name": "Tenley Mini Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8906247,
+"lon": -76.9319226,
+"name": "Capitol View Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9003074,
+"lon": -76.9389307,
+"name": "Menick's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9029855,
+"lon": -76.9364753,
+"name": "Suburban Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8973691,
+"lon": -76.9423361,
+"name": "Benning Heights Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9030784,
+"lon": -76.9340796,
+"name": "A & S Grocery",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8978641,
+"lon": -76.9255254,
+"name": "A-1 Grocery",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8989082,
+"lon": -76.9458632,
+"name": "R & M Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9214761,
+"lon": -77.0729046,
+"name": "Glover Park Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9252843,
+"lon": -77.080244,
+"name": "Novel Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9313015,
+"lon": -77.0787448,
+"name": "Mass Avenue & Mini Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9282709,
+"lon": -77.0799458,
+"name": "Westchester Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9308994,
+"lon": -77.027835,
+"name": "Odd Provisions",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9279649,
+"lon": -77.0258321,
+"name": "Stop & Go Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.931466,
+"lon": -77.0299532,
+"name": "Park Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9370059,
+"lon": -77.033028,
+"name": "New Dodge Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.924032,
+"lon": -77.0252682,
+"name": "City Corner Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9353976,
+"lon": -77.034944,
+"name": "Ogden Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9312793,
+"lon": -77.0237589,
+"name": "Gray's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9266522,
+"lon": -77.0267989,
+"name": "Sonya's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8999477,
+"lon": -77.0196947,
+"name": "Chinatown Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8949551,
+"lon": -77.0226946,
+"name": "8th Street Deli & Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9064403,
+"lon": -77.0356465,
+"name": "1500 Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9094669,
+"lon": -77.0460371,
+"name": "Oasis",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8992996,
+"lon": -77.0469123,
+"name": "Best Vending II",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9059619,
+"lon": -77.0497934,
+"name": "Federal Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9029778,
+"lon": -77.0518338,
+"name": "Marvelous Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.973818,
+"lon": -77.0182813,
+"name": "Fourth Street Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9749081,
+"lon": -77.0180161,
+"name": "Takoma Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9562068,
+"lon": -77.0220417,
+"name": "Rainbow Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9563932,
+"lon": -77.0118455,
+"name": "Brightwood Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9063259,
+"lon": -77.0704123,
+"name": "Wisemillers Grocery & Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9116137,
+"lon": -77.0676767,
+"name": "Le Petite Corner Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9103543,
+"lon": -77.0596779,
+"name": "Sara's Food Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9136347,
+"lon": -77.0151531,
+"name": "Rafael Grocery Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.916057,
+"lon": -77.0172278,
+"name": "Le Droit Park Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9168576,
+"lon": -77.0124155,
+"name": "U First Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9151443,
+"lon": -77.0123531,
+"name": "DC Mini Supermarket",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9193027,
+"lon": -77.0137891,
+"name": "Flagler Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9211478,
+"lon": -77.0093752,
+"name": "Sunbeam Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9320096,
+"lon": -77.0384555,
+"name": "Samber Food Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9324175,
+"lon": -77.0390542,
+"name": "Argyle Convenient Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.936428,
+"lon": -77.0372628,
+"name": "Woodner Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9446956,
+"lon": -77.0324516,
+"name": "Super Saver Grocery & Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9388185,
+"lon": -77.0330061,
+"name": "14th Mini-market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9399477,
+"lon": -77.0294793,
+"name": "Shepherd Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9113091,
+"lon": -77.0196844,
+"name": "6th & Q Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9058362,
+"lon": -77.0141934,
+"name": "B & M Food Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.90872,
+"lon": -77.0196517,
+"name": "ABC Liquors",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9071048,
+"lon": -77.0186819,
+"name": "5th & N Street Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9116648,
+"lon": -77.0232152,
+"name": "1618 Variety Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9067904,
+"lon": -77.0266901,
+"name": "Capitol Supermarket",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8731283,
+"lon": -77.0108332,
+"name": "Friendly Food Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.899573,
+"lon": -77.029305,
+"name": "Wawa",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8949945,
+"lon": -76.978706,
+"name": "Economy Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8888554,
+"lon": -76.9811629,
+"name": "Eastern Thrifty Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9308225,
+"lon": -77.0829773,
+"name": "Lee Tower Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9358591,
+"lon": -77.0819566,
+"name": "Berkshire Food & Drug",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9068509,
+"lon": -77.0819789,
+"name": "Town Square Gourmet",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9268148,
+"lon": -77.1029112,
+"name": "Mac Market & Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9090713,
+"lon": -77.0875351,
+"name": "Palisades Deli & Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.929876,
+"lon": -77.1064745,
+"name": "Mimi's Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9157515,
+"lon": -77.0374169,
+"name": "Freedom Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9166687,
+"lon": -77.0273013,
+"name": "Eleven Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9171672,
+"lon": -77.0311031,
+"name": "U Mini Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9154221,
+"lon": -77.0298757,
+"name": "Whitelaw Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.802302,
+"lon": -77.0615644,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8965266,
+"lon": -77.0511415,
+"name": "Market Of Columbia Plaza",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9078075,
+"lon": -77.0579857,
+"name": "Scheele's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9003551,
+"lon": -76.9851297,
+"name": "Dees Convenient Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9035899,
+"lon": -77.0187533,
+"name": "Safeway",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9098384,
+"lon": -77.0087465,
+"name": "24/7 Tobacco & Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.917163,
+"lon": -77.0278906,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9137659,
+"lon": -77.0216445,
+"name": "Elbo's Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8453213,
+"lon": -76.9968781,
+"name": "Quality Convenience Store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8379427,
+"lon": -77.0064389,
+"name": "Fort Carroll Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9405726,
+"lon": -77.0253831,
+"name": "Brightwood Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9325324,
+"lon": -77.0239598,
+"name": "Park Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9324625,
+"lon": -77.0239719,
+"name": "Dollar 1 General Merchandise",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9678187,
+"lon": -77.0277921,
+"name": "Intoto Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9677634,
+"lon": -77.027796,
+"name": "Jocelyn's Market la Casa Latina",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9616537,
+"lon": -77.0282188,
+"name": "Ge-Ex Grocery",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9568549,
+"lon": -77.0331906,
+"name": "Delicias Market",
+"shop": "greengrocer",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8110954,
+"lon": -77.0447977,
+"name": "Trader Joe's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9004867,
+"lon": -77.0183355,
+"name": "Gallery Market & Cafe",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.85606,
+"lon": -77.0428042,
+"name": "Hudson",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.907761,
+"lon": -77.0033132,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9058621,
+"lon": -77.0056211,
+"name": "Harris Teeter",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9100432,
+"lon": -77.0742113,
+"name": "Vital Vittles",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.963931,
+"lon": -77.0911212,
+"name": "Elizabeth Deli & Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.963652,
+"lon": -77.0905527,
+"name": "Friendship Gourmet Market",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8824016,
+"lon": -77.1114811,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.927614,
+"lon": -77.0326958,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8640872,
+"lon": -77.0842727,
+"name": "Giant",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9177532,
+"lon": -76.9712309,
+"name": "Grocery / corner store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9140552,
+"lon": -76.9885837,
+"name": "Grocery / corner store",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.897126,
+"lon": -77.1073335,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8867204,
+"lon": -77.0947148,
+"name": "Trader Joe's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9933627,
+"lon": -77.024375,
+"name": "Safeway",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.7978122,
+"lon": -77.0479536,
+"name": "Balducci's",
+"shop": "supermarket",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9304322,
+"lon": -77.0318376,
+"name": "Park Plaza",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9935946,
+"lon": -77.0328087,
+"name": "Lenox Beer-Wine-Deli",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8215526,
+"lon": -77.0478164,
+"name": "Russian Gourmet",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9629827,
+"lon": -77.010714,
+"name": "7-Eleven",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8539885,
+"lon": -77.0416444,
+"name": "Say Si Bon!",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.9627643,
+"lon": -76.9389062,
+"name": "Tiger Mart",
+"shop": "convenience",
+"source": "openstreetmap"
+},
+{
+"lat": 38.8774173,
+"lon": -77.0172181,
+"name": "Safeway",
+"shop": "supermarket",
+"source": "openstreetmap"
+}
+],
+"fetched_at": "2026-04-18T17:45:26Z",
+"source": "live"
+}
