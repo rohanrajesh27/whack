@@ -40,18 +40,12 @@ def _with_id(doc):
 @app.route('/receive-data', methods=['POST'])
 def receive_data():
     # Check if the request contains valid JSON
-
-    print("Incoming POST request received")
-    
     if request.is_json:
         data = request.get_json()  # Parse JSON data from request
         weight = data.get('weight')
         message = data.get('message')
 
         # Process the received data
-        print(f"Received weight: {weight}, message: {message}")
-
-        # Respond with success status
         return jsonify(status='success', weight=weight, message=message), 200
     else:
         # Invalid request format
