@@ -38,12 +38,13 @@
 
       <section class="grid-2">
         <div class="panel">
-          <div class="panel__header-row">
-            <div class="panel__header-row-left">
-              <h2>SKU catalog</h2>
-              <p class="muted">Pure product (SKU) info. Lots/readings live in the inventory table below.</p>
-            </div>
-            <form method="get" action="{{ url_for('dashboard') }}" class="panel__header-row-right">
+          <div class="panel__header">
+            <h2>SKU catalog</h2>
+            <p class="muted">Pure product (SKU) info. Lots/readings live in the inventory table below.</p>
+          </div>
+
+          <div class="sub-container">
+            <form method="get" action="{{ url_for('dashboard') }}" class="table-controls table-controls--boxed">
               <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
               {% if selected_food_item_id %}
                 <input type="hidden" name="food_item_id" value="{{ selected_food_item_id }}" />
@@ -65,10 +66,9 @@
                 </select>
               </label>
             </form>
-          </div>
 
-          <div class="table-scroll">
-            <div class="table table--sku">
+            <div class="table-scroll">
+              <div class="table table--sku">
               <div class="table__row table__row--head">
                 <div>Item</div>
                 <div>Department</div>
@@ -111,17 +111,19 @@
               {% endfor %}
             </div>
           </div>
+          </div>
 
           <div class="panel__divider"></div>
 
-          <div class="panel__header-row">
-            <div class="panel__header-row-left">
-              <h2>Inventory + markdown recommendations</h2>
-              <p class="muted">
-                This mirrors the brainstorm workflow: track lots + sensor signals, then recommend markdowns with guardrails.
-              </p>
-            </div>
-            <form method="get" action="{{ url_for('dashboard') }}" class="panel__header-row-right">
+          <div class="panel__header">
+            <h2>Inventory + markdown recommendations</h2>
+            <p class="muted">
+              This mirrors the brainstorm workflow: track lots + sensor signals, then recommend markdowns with guardrails.
+            </p>
+          </div>
+
+          <div class="sub-container">
+            <form method="get" action="{{ url_for('dashboard') }}" class="table-controls table-controls--boxed">
               <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
               <input type="hidden" name="sku_sort" value="{{ sku_sort }}" />
               {% if selected_department %}
@@ -139,10 +141,9 @@
                 </select>
               </label>
             </form>
-          </div>
 
-          <div class="table-scroll">
-            <div class="table table--inventory">
+            <div class="table-scroll">
+              <div class="table table--inventory">
             <div class="table__row table__row--head">
               <div>Lot</div>
               <div>Expires</div>
@@ -201,6 +202,7 @@
               </div>
             {% endfor %}
             </div>
+          </div>
           </div>
         </div>
 
