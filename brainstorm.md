@@ -1,3 +1,5 @@
+Rohan, Dane, Nick, Jonny
+
 ## Track 2: GW Global Food Institute
 
 ## Problem Statement 2
@@ -5,133 +7,182 @@
 
 The George Washington University — Global Food Institute
 
+---
+
+## Operating reality: what a DC corner store actually is
+
+Before we design anything, we ground ourselves in the real environment. Based on DC Central Kitchen's Healthy Corners program (the proven model referenced in the problem statement):
+
+- **Small footprint.** Produce often lives on a single shelf and one small fridge (roughly 24" x 24" x 61").
+- **Thin staffing.** Typically the owner plus one or two cashiers. No produce manager, no IT team.
+- **Low-tech baseline.** Many stores use basic cash registers. POS integration should not be assumed.
+- **Low price points.** Average suggested retail around $2.19 per item, priced at or below big-box grocery.
+- **SNAP-driven customer base.** 86% of Healthy Corners partner stores accept SNAP. SNAP Match coupons ($5 for fruits and vegetables) are a core affordability lever.
+- **Delivery cadence.** Healthy Corners delivers 1–3x per week, stores order by the unit.
+- **What shoppers care about.** Freshness is the #1 quality signal (77% of shoppers, per AU's 2025 evaluation), followed by display appearance and quantity available. Price and variety are close behind.
+
+**Design implication:** The solution has to work on a single produce shelf, with a single owner, no POS integration, alongside SNAP and SNAP Match, under a mission-aligned affordability ceiling.
+
+---
+
 ## Our solution (working concept)
 
 **Core insight**
-- **Fresh food has a shelf life** (freshness/ripeness changes daily), but corner stores often **price manually** and don’t have an easy way to “push” items before they spoil.
+
+Fresh food has a shelf life that changes daily, but corner stores price produce manually and have no low-cost way to markdown items before they spoil. Owners carry that risk in their head, which is one of the main reasons small stores hesitate to stock fresh produce in the first place.
 
 **Proposed solution**
-- Build **software + supporting hardware** (specific hardware list TBD) that **tracks freshness/ripeness / remaining shelf life** and **automatically updates prices**.
-- Use **dynamic pricing** to **move food faster** (sell items earlier at a higher price, then markdown as shelf life declines) to reduce spoilage and increase affordability.
+
+A shelf-edge freshness sensor and pricing display, purpose-built for the corner store (not the supermarket). It reads weight trend, volatile organic compounds, and storage conditions, computes a freshness score, and shows today's fair price on a small LCD right on the shelf. The owner does nothing. The shelf updates itself.
 
 **How it works (draft workflow)**
-- **Identify items**: Detect or scan each fresh item/lot when it arrives (produce, dairy, etc.).
-- **Estimate remaining shelf life**: Use signals like delivery date, storage conditions, and hardware-derived freshness indicators.
-- **Set pricing rules**: Configure floors/ceilings, margin targets, and fairness guardrails.
-- **Update labels/prices**: Automatically recommend or push price changes to labels/POS on a schedule (e.g., daily, twice daily).
-- **Learn over time**: Adjust shelf-life estimates and markdown cadence based on sell-through and waste.
 
-**Value proposition**
-- **Store owners**: Less waste, better margins, less manual work, clearer replenishment decisions.
-- **Community**: More affordable fresh food, fewer “bad” purchases, higher availability.
+1. **Item registration.** Owner scans or taps to register a delivery lot (e.g., "banana lot, delivered Monday"). Lowest-friction option is a QR scan from the DCCK delivery sheet or a manual button press.
+2. **Continuous sensing.** ESP32 reads load cell (weight trend), CCS811 (VOC/ethylene proxy for ripening), and DHT11 (temperature, humidity). Data is timestamped via Wi-Fi/NTP.
+3. **Freshness score.** A weighted, rules-based score from 0 to 100 blends weight loss rate, VOC trend, and cumulative temperature/humidity exposure.
+4. **Dynamic price.** Score maps to a price curve with a ceiling (never above the DCCK-aligned benchmark) and a floor (respects SNAP Match economics).
+5. **Shelf display.** LCD1602 shows today's price. LEDs give an at-a-glance status (green/yellow/amber/red).
+6. **Owner dashboard.** Weekly sales and waste summary auto-generated (mirrors the report DCCK currently produces by hand for partner stores).
 
-**Open questions / needs**
-- **Hardware list**: What sensors/devices are feasible + affordable for corner stores?
-- **Integration**: POS integration vs. standalone labeling?
-- **Operations**: Who applies labels / confirms markdowns in-store?
-- **Guardrails**: Minimum price thresholds, anti-gouging rules, and SNAP/WIC considerations.
+**Value proposition (in the order that matters for a corner store owner)**
 
-**Hardware (current inventory / ordered)**
+1. **Risk reduction.** Owners stock fresh produce more confidently because "day 8" bananas still sell at a fair markdown instead of being thrown out.
+2. **Customer trust.** A visible, freshness-linked price signals honesty and respect, which builds the repeat shopping behavior that underpins a healthy store economy.
+3. **Time savings.** Owners save minutes per day on manual markdowns and waste tracking.
+4. **Automated scorecard data.** The sensor auto-populates several variables in the Healthy Corners Scorecard (sales, waste, variety, deliveries), giving program operators clean data they currently collect manually.
+
+**SNAP and SNAP Match compatibility**
+
+Every price shown has to work inside SNAP rules and alongside DCCK's SNAP Match produce-for-produce coupon model. Guardrails built into the pricing logic:
+- **Mission ceiling.** Never price above a reference benchmark tied to big-box grocery.
+- **Affordability floor.** Never price so low that SNAP Match coupon economics break.
+- **Anti-gouging logic.** Price moves only downward from the anchor price as freshness declines. Prices do not float upward on supply shocks.
+
+---
+
+## Hardware (current inventory / ordered)
 
 **Ordered (confirmed)**
 - **Core system**
   - Elegoo UNO R3 starter kit (Arduino compatible)
-  - Inland ESP32-WROOM-32D module (recommended as main board for MVP due to Wi‑Fi)
+  - Inland ESP32-WROOM-32D module (main board for MVP, Wi-Fi enabled)
 - **Sensors (inputs)**
-  - Inland electronic scale kit: **5kg load cell + HX711**
-  - Inland **CCS811** air quality sensor module (VOC/CO2 equivalent; exploratory signal)
+  - Inland electronic scale kit: 5kg load cell + HX711 (weight trend, ripeness proxy)
+  - Inland CCS811 air quality sensor (VOC / ethylene proxy for ripening and spoilage)
 - **Output / interface**
-  - Inland **2-channel 5V relay** module
+  - Inland 2-channel 5V relay module
 - **Wiring**
   - Inland Dupont jumper wires (20cm, 3 pack)
 
-**Not yet confirmed (still needed / optional for MVP)**
-- **Temp/humidity sensor** (for storage conditions). If you have DHT11 already, it can work for first tests; otherwise consider DHT22/SHT31/BME280 later.
-- **LCD display** (+ optional I2C backpack to simplify wiring) and/or LEDs for a simple in-store UI.
-- **Breadboard** (if not included in the Uno kit) for quick prototyping.
+**Also on hand / confirmed for demo**
+- DHT11 temperature + humidity sensor (from Uno kit)
+- LCD1602 screen (price + status display)
+- LEDs (green/yellow/amber/red status indicators)
+- Breadboard, resistors, basic electronics
+- Webcam (optional, stretch goal for visual confirmation)
 
-**Hardware notes / gaps to fill**
-- **Timekeeping**: either use **Wi‑Fi/NTP (ESP32)** or add an **RTC module** for stable timestamps.
-- **Item identification**: need a low-friction way to tie readings to an item/lot (QR/barcode scan, NFC, or simple manual selection).
-- **Data logging** (optional but useful): microSD module or Wi‑Fi upload to the software backend.
+**Hardware notes and gaps**
 
-**Recommended “minimum viable hardware MVP” (fastest to demo)**
-- **ESP32 + Load cell + HX711 + temp/humidity sensor + LCD**
-- Use **weight trend + storage conditions (temp/humidity) + delivery date** to compute a simple shelf-life score and show a **markdown tier / recommended price** on the LCD (later sync to the app/POS).
+- **Timekeeping.** ESP32 Wi-Fi/NTP for timestamps. RTC module only if Wi-Fi is unavailable at the demo site.
+- **Item identification.** QR/barcode scan (phone camera) or a simple physical button on the device to register "new lot, day zero." Low friction for the owner.
+- **Data logging.** Wi-Fi upload to a lightweight backend (Firebase or a local Flask endpoint) for the dashboard demo. MicroSD as fallback.
+
+**Minimum viable hardware MVP (what we actually demo)**
+
+ESP32 + load cell + HX711 + DHT11 + CCS811 + LCD1602 + status LEDs, running a freshness score that drives a live price on the shelf. Two fruits on stage: one fresh banana, one pre-aged banana. Judges watch the prices differ in real time.
+
+---
 
 ## Opportunity Areas
 
 ### 1) Technology for Healthy Inventory
-Build tools that help store owners source, price, and manage fresh and nutritious food efficiently.
+
+Tools that help store owners source, price, and manage fresh and nutritious food efficiently, built for the single-owner operating reality.
 
 **Brainstorm ideas**
-- **Smart ordering**: Suggested order quantities for produce/dairy based on past sales, seasonality, and local demand.
-- **Spoilage + shrink tracking**: Simple daily “waste log” → auto-learns spoilage rates and adjusts future ordering.
-- **Dynamic pricing**: Markdown recommendations for soon-to-expire items (with guardrails so pricing stays fair).
-- **Healthy SKU starter kits**: Curated list of affordable, culturally relevant “healthy essentials” with supplier links.
-- **Scan-to-manage inventory**: Phone camera barcode/receipt scan to update inventory without extra hardware.
-- **Nutrition + margin view**: Combine profit margin + “healthy score” so owners can stock items that work financially.
+- **Shelf-edge dynamic pricing.** The core of our MVP. Freshness-linked price updates on an LCD at the shelf, no POS integration required.
+- **Smart ordering.** Suggested order quantities for produce and dairy based on past sales, seasonality, and local demand patterns.
+- **Spoilage and shrink tracking.** A daily waste log that auto-learns spoilage rates and improves future ordering. Our sensor populates this automatically.
+- **Scorecard automation.** Auto-populate variables in the Healthy Corners Scorecard (sales, waste, variety, deliveries) from sensor data.
+- **Phone-based scan-to-manage inventory.** Owner or staff uses a phone camera to register a lot, no extra hardware.
+- **Margin plus freshness view.** Combine profit margin with a freshness score so owners see the financial picture at a glance.
 
 **Key users**
-- **Store owners/managers**
-- **Cashiers/staff**
-- **Local suppliers/distributors**
+- Store owners and managers (primary)
+- Cashiers and staff (secondary, they execute the markdown at the register)
+- Healthy Corners program staff (tertiary, they use the auto-populated scorecard data)
 
 **Questions to answer**
-- **Data availability**: Do stores have POS data? If not, what’s the lowest-friction way to capture sales/inventory?
-- **Cold chain**: What refrigeration/storage capacity constraints exist?
-- **Pricing constraints**: What are acceptable margins and price points for the neighborhood?
+- **Data availability.** Most small stores lack POS data. The sensor itself becomes the data source.
+- **Cold chain.** Refrigeration is limited. The sensor has to work outside the fridge for bananas, onions, potatoes, and similar items, and inside for leafy greens and cut fruit.
+- **Pricing constraints.** Margin thresholds have to reflect the DCCK affordability ceiling and SNAP Match economics.
 
 ---
 
 ### 2) Community-Centered Store Design
-Create solutions that make corner stores more engaging, culturally relevant, and responsive to local needs.
+
+Make corner stores more engaging, culturally relevant, and responsive to local needs.
 
 **Brainstorm ideas**
-- **Community preference board**: In-store QR survey + lightweight voting on new items; share results with owners.
-- **Culturally relevant healthy swaps**: Recipe cards and ingredient bundles reflecting local cuisines.
-- **Healthy “grab-and-go” zone**: Layout guidance + signage templates; small footprint planograms for tight spaces.
-- **Loyalty program**: Rewards that emphasize healthy purchases (e.g., points multipliers on produce/water).
-- **Community partner hours**: Schedule tool for hosting pop-ups (WIC/SNAP support, nutrition demos, clinics).
-- **In-store education**: Simple shelf tags (“high fiber”, “low sugar”) and price-per-serving labels.
+- **Community preference board.** In-store QR survey and lightweight voting on new items, results shared with owners.
+- **Culturally relevant healthy swaps.** Recipe cards and ingredient bundles reflecting local cuisines (Ethiopian, West African, Caribbean, Latin American, depending on neighborhood).
+- **Healthy grab-and-go zone.** Layout guidance and signage templates for tight spaces. DCCK has found grab-and-go items sell strongly.
+- **Loyalty built around produce.** Rewards that emphasize healthy purchases, designed to stack cleanly with SNAP Match.
+- **Community partner hours.** Schedule tool for pop-ups (WIC/SNAP support, nutrition demos, clinics).
+- **Plain-language shelf tags.** Simple labels like "high fiber" and "low sugar," plus price-per-serving.
 
 **Key users**
-- **Community members/shoppers**
-- **Store owners**
-- **Community organizations (clinics, schools, nonprofits)**
+- Community members and shoppers
+- Store owners
+- Community organizations (clinics, schools, nonprofits, DCCK Store Navigators)
 
 **Questions to answer**
-- **Trust + engagement**: What incentives actually drive repeat healthy purchases?
-- **Language + accessibility**: Which languages and literacy levels must signage/UX support?
-- **Space constraints**: What’s the minimum viable layout change a store can adopt?
+- **Trust and engagement.** What incentives actually drive repeat healthy purchases in LILA neighborhoods?
+- **Language and accessibility.** Which languages and literacy levels must signage and UX support?
+- **Space constraints.** What is the smallest layout change a store can adopt and sustain?
 
 ---
 
 ### 3) Supply Chain Innovation
-Design systems that improve access to affordable fresh food through better distribution and partnerships.
+
+Improve access to affordable fresh food through better distribution and partnerships, modeled on what DCCK already does as a mission-driven wholesaler.
 
 **Brainstorm ideas**
-- **Group purchasing**: Co-op ordering across multiple corner stores to hit distributor minimums and reduce costs.
-- **Micro-distribution**: Local “hub” that breaks down bulk produce into store-sized orders.
-- **Demand aggregation dashboard**: Show distributors consistent demand patterns to justify routes and better pricing.
-- **Local producer partnerships**: Connect stores with nearby farms/urban gardens; predictable weekly order cycles.
-- **Last-mile delivery coordination**: Optimize delivery windows and consolidate shipments to reduce spoilage.
-- **SNAP/WIC optimization**: Highlight items that are eligible and move reliably; reduce risk for owners.
+- **Group purchasing.** Co-op ordering across multiple corner stores to hit distributor minimums and reduce costs.
+- **Micro-distribution hub.** A local hub that breaks down bulk produce into store-sized orders (the DCCK model).
+- **Demand aggregation dashboard.** Show distributors and local farms consistent demand patterns to justify routes and better pricing.
+- **Local producer partnerships.** Connect stores with nearby farms and urban gardens, predictable weekly order cycles.
+- **Last-mile delivery coordination.** Optimize delivery windows and consolidate shipments to reduce spoilage.
+- **SNAP/WIC alignment.** Highlight items that are benefit-eligible and move reliably, reducing owner risk.
 
 **Key users**
-- **Distributors/wholesalers**
-- **Local producers**
-- **Store owners**
-- **City/NGO partners**
+- Distributors and wholesalers (including mission-driven ones like DCCK)
+- Local producers
+- Store owners
+- City and NGO partners
 
 **Questions to answer**
-- **Minimum order + delivery cadence**: What are distributor constraints today?
-- **Pricing**: Where do costs spike (transport, storage, middlemen) and which lever is most impactful?
-- **Reliability**: How do we ensure consistent supply (and avoid “one good week, then nothing”)?
+- **Minimum order and delivery cadence.** What are distributor constraints today for small-volume orders?
+- **Cost drivers.** Where do costs spike (transport, storage, middlemen) and which lever is most impactful?
+- **Reliability.** How do we ensure consistent supply?
 
 ---
 
-## Quick next steps (to refine the problem)
-- **Field interviews**: 3–5 store owners + 5–10 shoppers to validate pain points and constraints.
-- **Define metrics**: Availability of fresh items, affordability, shrink/spoilage rate, healthy item sales mix.
-- **Pick a wedge**: Inventory tool, community engagement feature, or supply-chain coordination MVP.
+## Pitch alignment: why this fits Problem Statement 2
+
+| Problem statement ask | How our solution responds |
+|---|---|
+| Build on proven models of healthy food access in urban corner stores | Directly extends the DCCK Healthy Corners model by automating manual pricing and scorecard reporting |
+| Design the next generation corner store experience for DC | Shelf-edge freshness sensor deployable on a single shelf, within the existing DCCK infrastructure |
+| Serve both store owners and residents | Owner gets risk reduction and time savings; resident gets visible fairness and a lower price as freshness declines |
+| Consider sustainability, scalability, equity | Low hardware cost, Wi-Fi enabled for fleet scaling, SNAP/SNAP Match compatible by design |
+| Solution could be technology platform, service design, policy framework, community engagement, or a combination | We combine a hardware/software platform with a policy-aware pricing framework (affordability ceiling, anti-gouging floor) |
+
+---
+
+## Quick next steps
+
+- **Field interviews.** 3–5 store owners (ideally DCCK Healthy Corners partners) and 5–10 shoppers to validate pain points and the pricing display concept.
+- **Define metrics.** Availability of fresh items, affordability, shrink/spoilage rate, healthy item sales mix, SNAP Match redemption rate.
+- **Pick the wedge.** Shelf-edge freshness sensor for bananas and apples is our MVP wedge. Everything else is roadmap.
+- **Demo plan.** One fresh banana and one pre-aged banana on stage. Live price differential on the LCD. Dashboard shows the freshness curve and a waste-avoided counter.
