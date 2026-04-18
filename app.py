@@ -1,97 +1,46 @@
-from flask import Flask, render_template, redirect, url_for, request, g, flash, session
+from flask import Flask, render_template, redirect, url_for, request, flash, session
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 import hashlib
 import os
 import random
-import sqlite3
 import datetime
+from collections import defaultdict
 from functools import wraps
+
+from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash
 
 import dc_grocery
+from mongo_db import get_mongo_db
+from db_mongo import alloc_id, init_mongo, now_ts
 
 app = Flask("app")
 FLASK_ENV = "development"
 app.secret_key = "CHANGE ME"
 
 
-def get_connection():
-    connection = getattr(g, "_database", None)
-    if connection is None:
-        connection = g._database = sqlite3.connect("database.db")
-        connection.row_factory = sqlite3.Row
-    return connection
-
-
-@app.teardown_appcontext
-def close_connection(exception):
-    connection = getattr(g, "_database", None)
-    if connection is not None:
-        connection.close()
-
-
-'''
-TEMPLATE FOR CALLING THE DB
-
-conn = get_connection()
-cursor = conn.cursor()
-cursor.execute("SQL QUERY")
-data = cursor.fetchall()
-row_1 = data[0]
-cursor.close()
-
-'''
-
-
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    with open("database_schema.sql", "r", encoding="utf-8") as f:
-        cursor.executescript(f.read())
-
-    # Lightweight migrations for existing local DB files.
-    # Keeps the project demo-friendly without a full migration framework.
-    cursor.execute("PRAGMA table_info(lots)")
-    lot_cols = {row["name"] for row in cursor.fetchall()}
-    if "lot_code" not in lot_cols:
-        cursor.execute("ALTER TABLE lots ADD COLUMN lot_code TEXT")
-    # Create after ensuring the column exists (handles old DBs + fresh DBs)
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_lots_food_item_lot_code ON lots(food_item_id, lot_code)")
-
-    cursor.execute("PRAGMA table_info(food_items)")
-    item_cols = {row["name"] for row in cursor.fetchall()}
-    if "department" not in item_cols:
-        cursor.execute("ALTER TABLE food_items ADD COLUMN department TEXT")
-        # Best-effort backfill for older DBs that used description as a category label.
-        cursor.execute(
-            """
-            UPDATE food_items
-            SET department = COALESCE(department, description)
-            WHERE department IS NULL AND description IS NOT NULL
-            """
-        )
-    if "sku_number" not in item_cols:
-        cursor.execute("ALTER TABLE food_items ADD COLUMN sku_number TEXT")
-    if "barcode" not in item_cols:
-        cursor.execute("ALTER TABLE food_items ADD COLUMN barcode TEXT")
-    if "image_url" not in item_cols:
-        cursor.execute("ALTER TABLE food_items ADD COLUMN image_url TEXT")
-    if "barcode" in item_cols or "barcode" not in item_cols:
-        # Create after ensuring the column exists (handles old DBs + fresh DBs)
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_food_items_barcode ON food_items(barcode)")
-
-    cursor.execute("PRAGMA table_info(users)")
-    users_cols = {row["name"] for row in cursor.fetchall()}
-    if users_cols and "password_hash" not in users_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-
-    conn.commit()
-    cursor.close()
+def _with_id(doc):
+    """Expose Mongo _id as id for templates (SQLite compatibility)."""
+    if doc is None:
+        return None
+    d = dict(doc)
+    if "_id" in d:
+        d["id"] = d.pop("_id")
+    return d
 
 
 @app.before_request
-def _ensure_db():
-    init_db()
+def _ensure_mongo():
+    if not getattr(app, "_mongo_ready", False):
+        init_mongo()
+        app._mongo_ready = True
 
 
 def login_required(view_func):
@@ -108,22 +57,21 @@ def get_or_create_user(username, password=None):
     uname = (username or "").strip() or "demo"
     pw = password or "demo"
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE username = ?", (uname,))
-    row = cursor.fetchone()
-    if row is not None:
-        cursor.close()
-        return row["id"]
+    db = get_mongo_db()
+    existing = db.users.find_one({"username": uname})
+    if existing is not None:
+        return int(existing["_id"])
 
-    cursor.execute(
-        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-        (uname, generate_password_hash(pw)),
+    uid = alloc_id("users")
+    db.users.insert_one(
+        {
+            "_id": uid,
+            "username": uname,
+            "password_hash": generate_password_hash(pw),
+            "created_at": now_ts(),
+        }
     )
-    conn.commit()
-    user_id = cursor.lastrowid
-    cursor.close()
-    return user_id
+    return uid
 
 
 def parse_optional_float(value):
@@ -229,20 +177,15 @@ def city_admin_required(view_func):
 
 def get_city_health_metrics():
     """Aggregate demo + DB-backed metrics for city-wide food health (spoilage, markdowns, freshness)."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) AS c FROM stores")
-    store_count = int(cursor.fetchone()["c"] or 0)
+    db = get_mongo_db()
+    store_count = db.stores.count_documents({})
 
-    cursor.execute(
-        """
-        SELECT l.expires_at AS expires_at, fi.price AS price
-        FROM lots l
-        JOIN food_items fi ON fi.id = l.food_item_id
-        """
-    )
-    rows = cursor.fetchall()
-    cursor.close()
+    rows = []
+    for lot in db.lots.find():
+        fi = db.food_items.find_one({"_id": lot["food_item_id"]})
+        if fi is None:
+            continue
+        rows.append({"expires_at": lot.get("expires_at"), "price": fi.get("price")})
 
     now = datetime.datetime.now()
     status_counts = {
@@ -325,18 +268,13 @@ def get_city_health_metrics():
 
 
 def get_or_create_default_store():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM stores ORDER BY id ASC LIMIT 1")
-    store = cursor.fetchone()
-    if store is not None:
-        cursor.close()
-        return store["id"]
-    cursor.execute("INSERT INTO stores (name, address) VALUES (?, ?)", ("Demo Corner Store", ""))
-    conn.commit()
-    store_id = cursor.lastrowid
-    cursor.close()
-    return store_id
+    db = get_mongo_db()
+    first = db.stores.find_one(sort=[("_id", 1)])
+    if first is not None:
+        return int(first["_id"])
+    sid = alloc_id("stores")
+    db.stores.insert_one({"_id": sid, "name": "Demo Corner Store", "address": "", "created_at": now_ts()})
+    return sid
 
 
 # Demo catalogs: (name, description, department / product type, base price)
@@ -380,38 +318,39 @@ _DEMO_PARTNER_STORES = [
 ]
 
 
-def _ensure_partner_stores(cursor):
+def _ensure_partner_stores():
+    db = get_mongo_db()
     for name, address in _DEMO_PARTNER_STORES:
-        cursor.execute("SELECT id FROM stores WHERE name = ?", (name,))
-        if cursor.fetchone() is None:
-            cursor.execute(
-                "INSERT INTO stores (name, address) VALUES (?, ?)",
-                (name, address),
-            )
+        if db.stores.find_one({"name": name}) is None:
+            sid = alloc_id("stores")
+            db.stores.insert_one({"_id": sid, "name": name, "address": address, "created_at": now_ts()})
 
 
-def _seed_store_catalog(cursor, store_id, variant_index):
-    """Insert SKUs, multiple batches (lots) per SKU, and sample sensor readings. Idempotent per store: caller checks empty first."""
+def _seed_store_catalog(store_id, variant_index):
+    """Insert SKUs, lots, and sample readings. Caller ensures store has no items yet."""
+    db = get_mongo_db()
     catalog = _DEMO_CATALOG_VARIANTS[variant_index % len(_DEMO_CATALOG_VARIANTS)]
     now = datetime.datetime.now().replace(microsecond=0)
     food_item_ids = []
 
     for name, desc, department, price in catalog:
-        cursor.execute(
-            """
-            INSERT INTO food_items (name, description, department, sku_number, barcode, image_url, price, store_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (name, desc, department, None, None, None, price, store_id),
-        )
-        fid = cursor.lastrowid
-        cursor.execute(
-            "UPDATE food_items SET barcode = ?, image_url = ? WHERE id = ?",
-            (generate_barcode_for_item_id(fid), generate_image_url_for_item_id(fid), fid),
+        fid = alloc_id("food_items")
+        db.food_items.insert_one(
+            {
+                "_id": fid,
+                "name": name,
+                "description": desc,
+                "department": department,
+                "sku_number": None,
+                "barcode": generate_barcode_for_item_id(fid),
+                "image_url": generate_image_url_for_item_id(fid),
+                "price": price,
+                "store_id": store_id,
+                "created_at": now_ts(),
+            }
         )
         food_item_ids.append(fid)
 
-        # Two batches per product: different receipt times, expiries, and quantities
         batch_specs = [
             (0, 36, 5, "Case A / primary"),
             (1, 12, 1, "Case B / backup"),
@@ -420,53 +359,55 @@ def _seed_store_catalog(cursor, store_id, variant_index):
             received = now - datetime.timedelta(hours=hours_ago + batch_n * 4)
             expires = now + datetime.timedelta(days=days_until_exp, hours=batch_n * 2)
             lot_code = f"ST{store_id}-I{fid}B{batch_n + 1}"
-            cursor.execute(
-                """
-                INSERT INTO lots (food_item_id, lot_code, received_at, expires_at, quantity_label, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    fid,
-                    lot_code,
-                    to_storage_datetime(received),
-                    to_storage_datetime(expires),
-                    qty_note,
-                    f"Demo batch · {department}",
-                ),
+            lot_id = alloc_id("lots")
+            db.lots.insert_one(
+                {
+                    "_id": lot_id,
+                    "food_item_id": fid,
+                    "lot_code": lot_code,
+                    "received_at": received,
+                    "expires_at": expires,
+                    "quantity_label": qty_note,
+                    "notes": f"Demo batch · {department}",
+                    "created_at": now_ts(),
+                }
             )
-            lot_id = cursor.lastrowid
             weight_g = 1100.0 + (fid % 7) * 35 + batch_n * 120
-            cursor.execute(
-                """
-                INSERT INTO sensor_readings (lot_id, weight_g, temp_c, humidity_rh, voc_ppb, recorded_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (lot_id, weight_g, 3.5 + batch_n * 0.4, 52.0 + batch_n * 2, 420 + batch_n * 40, to_storage_datetime(now)),
+            rid = alloc_id("sensor_readings")
+            db.sensor_readings.insert_one(
+                {
+                    "_id": rid,
+                    "lot_id": lot_id,
+                    "weight_g": weight_g,
+                    "temp_c": 3.5 + batch_n * 0.4,
+                    "humidity_rh": 52.0 + batch_n * 2,
+                    "voc_ppb": 420 + batch_n * 40,
+                    "recorded_at": now,
+                    "created_at": now_ts(),
+                }
             )
 
-    # Pricing guardrails on a few SKUs for markdown demos
     for fid in food_item_ids[:3]:
-        cursor.execute("SELECT price FROM food_items WHERE id = ?", (fid,))
-        row = cursor.fetchone()
-        base = float(row["price"] or 0)
+        fi = db.food_items.find_one({"_id": fid})
+        base = float(fi.get("price") or 0) if fi else 0.0
         if base <= 0:
             continue
-        cursor.execute(
-            """
-            INSERT INTO pricing_rules (food_item_id, min_price, max_price, margin_floor_pct)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(food_item_id) DO UPDATE SET
-              min_price = excluded.min_price,
-              max_price = excluded.max_price,
-              margin_floor_pct = excluded.margin_floor_pct
-            """,
-            (fid, round(base * 0.35, 2), round(base * 1.15, 2), 12.0),
+        pr_id = alloc_id("pricing_rules")
+        db.pricing_rules.insert_one(
+            {
+                "_id": pr_id,
+                "food_item_id": fid,
+                "min_price": round(base * 0.35, 2),
+                "max_price": round(base * 1.15, 2),
+                "margin_floor_pct": 12.0,
+                "created_at": now_ts(),
+            }
         )
 
 
-def _store_has_items(cursor, store_id):
-    cursor.execute("SELECT COUNT(*) AS c FROM food_items WHERE store_id = ?", (store_id,))
-    return int(cursor.fetchone()["c"] or 0) > 0
+def _store_has_items(store_id):
+    db = get_mongo_db()
+    return db.food_items.count_documents({"store_id": store_id}) > 0
 
 
 @app.route('/')
@@ -554,155 +495,112 @@ def dashboard():
     selected_food_item_id = request.args.get("food_item_id", type=int)
     sku_sort = (request.args.get("sku_sort") or "").strip() or "created"
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    db = get_mongo_db()
 
-    cursor.execute("SELECT id, name, address FROM stores WHERE id = ?", (store_id,))
-    store = cursor.fetchone()
-    if store is None:
-        cursor.execute("SELECT id, name, address FROM stores ORDER BY id ASC LIMIT 1")
-        store = cursor.fetchone()
-        if store is not None:
-            store_id = store["id"]
+    store_doc = db.stores.find_one({"_id": store_id})
+    if store_doc is None:
+        store_doc = db.stores.find_one(sort=[("_id", 1)])
+        if store_doc is not None:
+            store_id = int(store_doc["_id"])
             session["store_id"] = store_id
         else:
-            cursor.close()
             store_id = get_or_create_default_store()
             session["store_id"] = store_id
             return redirect(url_for("dashboard", store_id=store_id))
+    store = _with_id(store_doc)
 
-    cursor.execute(
-        """
-        SELECT DISTINCT department
-        FROM food_items
-        WHERE store_id = ? AND department IS NOT NULL AND TRIM(department) != ''
-        ORDER BY department ASC
-        """,
-        (store_id,),
+    raw_depts = db.food_items.distinct("department", {"store_id": store_id})
+    departments = sorted(
+        {str(d).strip() for d in raw_depts if d is not None and str(d).strip() != ""}
     )
-    departments = [r["department"] for r in cursor.fetchall()]
 
-    cursor.execute(
-        """
-        SELECT id, name, department
-        FROM food_items
-        WHERE store_id = ?
-          AND (? IS NULL OR department = ?)
-        ORDER BY name ASC
-        """,
-        (store_id, selected_department, selected_department),
-    )
-    product_options = cursor.fetchall()
-
-    sku_order_by = "datetime(fi.created_at) DESC"
-    if sku_sort == "department":
-        sku_order_by = "COALESCE(fi.department, ''), fi.name ASC"
-
-    sku_params = [store_id]
-    sku_dept_clause = ""
+    po_query: dict = {"store_id": store_id}
     if selected_department:
-        sku_dept_clause = "AND fi.department = ?"
-        sku_params.append(selected_department)
+        po_query["department"] = selected_department
+    product_options = [
+        _with_id(x)
+        for x in db.food_items.find(po_query, {"name": 1, "department": 1}).sort("name", 1)
+    ]
 
-    cursor.execute(
-        f"""
-        SELECT
-          fi.id AS food_item_id,
-          fi.name AS item_name,
-          fi.description AS item_description,
-          fi.department AS department,
-          fi.sku_number AS sku_number,
-          fi.barcode AS barcode,
-          fi.image_url AS image_url,
-          fi.price AS base_price,
-          (
-            SELECT COUNT(*)
-            FROM lots l
-            WHERE l.food_item_id = fi.id
-          ) AS total_lots
-        FROM food_items fi
-        WHERE fi.store_id = ?
-        {sku_dept_clause}
-        ORDER BY {sku_order_by}
-        """,
-        tuple(sku_params),
-    )
+    sku_query: dict = {"store_id": store_id}
+    if selected_department:
+        sku_query["department"] = selected_department
+    sku_items = list(db.food_items.find(sku_query))
+    if sku_sort == "department":
+        sku_items.sort(key=lambda x: ((x.get("department") or ""), (x.get("name") or "")))
+    else:
+        sku_items.sort(
+            key=lambda x: x.get("created_at") or datetime.datetime.min,
+            reverse=True,
+        )
+
     skus = []
-    for it in cursor.fetchall():
+    for fi in sku_items:
+        fid = fi["_id"]
+        total_lots = db.lots.count_documents({"food_item_id": fid})
         skus.append(
             {
-                "food_item_id": it["food_item_id"],
-                "item_name": it["item_name"],
-                "item_name_short": abbreviate_product_name(it["item_name"], 18),
-                "item_description": it["item_description"],
-                "department": it["department"],
-                "sku_number": it["sku_number"],
-                "barcode": it["barcode"],
-                "image_url": it["image_url"],
-                "base_price": it["base_price"],
-                "total_lots": it["total_lots"] or 0,
+                "food_item_id": fid,
+                "item_name": fi.get("name"),
+                "item_name_short": abbreviate_product_name(fi.get("name"), 18),
+                "item_description": fi.get("description"),
+                "department": fi.get("department"),
+                "sku_number": fi.get("sku_number"),
+                "barcode": fi.get("barcode"),
+                "image_url": fi.get("image_url"),
+                "base_price": fi.get("price"),
+                "total_lots": total_lots,
             }
         )
 
     now = datetime.datetime.now()
-    inventory_rows = []
-
-    dept_clause = ""
-    product_clause = ""
-    params = [store_id]
+    inv_fi_query: dict = {"store_id": store_id}
     if selected_department:
-        dept_clause = "AND fi.department = ?"
-        params.append(selected_department)
+        inv_fi_query["department"] = selected_department
     if selected_food_item_id:
-        product_clause = "AND fi.id = ?"
-        params.append(selected_food_item_id)
+        inv_fi_query["_id"] = selected_food_item_id
+    inv_fitems = list(db.food_items.find(inv_fi_query))
+    fi_by_id = {f["_id"]: f for f in inv_fitems}
+    if not fi_by_id:
+        lots_for_inv = []
+    else:
+        lots_for_inv = list(db.lots.find({"food_item_id": {"$in": list(fi_by_id.keys())}}))
 
-    cursor.execute(
-        f"""
-        SELECT
-          l.id AS lot_id,
-          l.lot_code AS lot_code,
-          l.received_at AS received_at,
-          l.expires_at AS expires_at,
-          fi.name AS item_name,
-          fi.price AS base_price,
-          fi.department AS department,
-          pr.min_price AS min_price,
-          pr.max_price AS max_price,
-          (
-            SELECT sr.weight_g
-            FROM sensor_readings sr
-            WHERE sr.lot_id = l.id
-            ORDER BY datetime(sr.recorded_at) DESC
-            LIMIT 1
-          ) AS latest_weight_g
-        FROM lots l
-        JOIN food_items fi ON fi.id = l.food_item_id
-        LEFT JOIN pricing_rules pr ON pr.food_item_id = fi.id
-        WHERE fi.store_id = ?
-        {dept_clause}
-        {product_clause}
-        ORDER BY
-          CASE WHEN l.expires_at IS NULL THEN 1 ELSE 0 END,
-          datetime(l.expires_at) ASC
-        LIMIT 200
-        """,
-        tuple(params),
-    )
+    def _exp_sort_key(lot):
+        ex = lot.get("expires_at")
+        if ex is None:
+            return (1, datetime.datetime.max)
+        if isinstance(ex, datetime.datetime):
+            dt = ex
+        else:
+            dt = parse_storage_datetime(ex) or datetime.datetime.max
+        return (0, dt)
 
-    for it in cursor.fetchall():
-        expires_at = it["expires_at"]
+    lots_for_inv.sort(key=_exp_sort_key)
+    lots_for_inv = lots_for_inv[:200]
+
+    inventory_rows = []
+    for lot in lots_for_inv:
+        fi = fi_by_id.get(lot["food_item_id"])
+        if fi is None:
+            continue
+        pr = db.pricing_rules.find_one({"food_item_id": fi["_id"]})
+        min_price = pr.get("min_price") if pr else None
+        max_price = pr.get("max_price") if pr else None
+
+        sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", -1)])
+        latest_weight_g = sr.get("weight_g") if sr else None
+
+        expires_at = lot.get("expires_at")
         days_left = None
         if expires_at:
-            exp_dt = parse_storage_datetime(expires_at)
+            exp_dt = expires_at if isinstance(expires_at, datetime.datetime) else parse_storage_datetime(expires_at)
             if exp_dt is not None:
                 days_left = (exp_dt.date() - now.date()).days
 
-        rec = compute_markdown_recommendation(it["base_price"], days_left)
+        rec = compute_markdown_recommendation(fi.get("price"), days_left)
         recommended_price = rec["recommended_price"]
         if recommended_price is not None:
-            min_price = it["min_price"]
-            max_price = it["max_price"]
             if min_price is not None and recommended_price < min_price:
                 recommended_price = min_price
                 rec["label"] = f"{rec['label']} (floored)"
@@ -712,68 +610,59 @@ def dashboard():
 
         inventory_rows.append(
             {
-                "lot_id": it["lot_id"],
-                "lot_code": it["lot_code"] or f"#{it['lot_id']}",
-                "item_name": it["item_name"],
-                "item_name_short": abbreviate_product_name(it["item_name"], 22),
-                "department": it["department"],
-                "received_at_human": format_datetime_for_store_users(it["received_at"]),
-                "expires_at_human": format_date_for_store_users(it["expires_at"]),
+                "lot_id": lot["_id"],
+                "lot_code": lot.get("lot_code") or f"#{lot['_id']}",
+                "item_name": fi.get("name"),
+                "item_name_short": abbreviate_product_name(fi.get("name"), 22),
+                "department": fi.get("department"),
+                "received_at_human": format_datetime_for_store_users(lot.get("received_at")),
+                "expires_at_human": format_date_for_store_users(lot.get("expires_at")),
                 "days_left": days_left,
-                "latest_weight_g": it["latest_weight_g"],
+                "latest_weight_g": latest_weight_g,
                 "rec_status": rec["status"],
                 "rec_label": rec["label"],
                 "recommended_price": recommended_price,
-                "min_price": it["min_price"],
-                "max_price": it["max_price"],
+                "min_price": min_price,
+                "max_price": max_price,
             }
         )
 
-    cursor.execute(
-        """
-        SELECT
-          COALESCE(NULLIF(TRIM(fi.department), ''), 'Uncategorized') AS department,
-          COUNT(DISTINCT fi.id) AS sku_count,
-          COUNT(l.id) AS batch_count
-        FROM food_items fi
-        LEFT JOIN lots l ON l.food_item_id = fi.id
-        WHERE fi.store_id = ?
-        GROUP BY COALESCE(NULLIF(TRIM(fi.department), ''), 'Uncategorized')
-        ORDER BY department ASC
-        """,
-        (store_id,),
-    )
-    department_batch_summary = [dict(r) for r in cursor.fetchall()]
+    fis_store = list(db.food_items.find({"store_id": store_id}))
+    fi_dept = {
+        f["_id"]: (f.get("department") or "").strip() or "Uncategorized" for f in fis_store
+    }
 
-    cursor.execute("SELECT id, name, address FROM stores ORDER BY name ASC")
-    stores_nav = cursor.fetchall()
+    dept_skus = defaultdict(set)
+    dept_batches = defaultdict(int)
+    for f in fis_store:
+        d = (f.get("department") or "").strip() or "Uncategorized"
+        dept_skus[d].add(f["_id"])
+    for lot in db.lots.find({"food_item_id": {"$in": list(fi_dept.keys())}}):
+        d = fi_dept.get(lot["food_item_id"], "Uncategorized")
+        dept_batches[d] += 1
+    department_batch_summary = [
+        {"department": d, "sku_count": len(dept_skus[d]), "batch_count": dept_batches.get(d, 0)}
+        for d in sorted(dept_skus.keys())
+    ]
 
-    cursor.execute("SELECT id, name FROM food_items WHERE store_id = ? ORDER BY name ASC", (store_id,))
-    food_items = cursor.fetchall()
-    cursor.execute(
-        """
-        SELECT l.id, l.lot_code, fi.name AS item_name, l.received_at
-        FROM lots l
-        JOIN food_items fi ON fi.id = l.food_item_id
-        WHERE fi.store_id = ?
-        ORDER BY datetime(l.received_at) DESC
-        LIMIT 50
-        """,
-        (store_id,),
-    )
+    stores_nav = [_with_id(s) for s in db.stores.find().sort("name", 1)]
+    food_items = [_with_id(f) for f in db.food_items.find({"store_id": store_id}).sort("name", 1)]
+
+    fi_ids_nav = [f["_id"] for f in db.food_items.find({"store_id": store_id}, {"_id": 1})]
     lots = []
-    for l in cursor.fetchall():
-        lots.append(
-            {
-                "id": l["id"],
-                "item_name": l["item_name"],
-                "lot_code": l["lot_code"],
-                "received_at": l["received_at"],
-                "received_at_human": format_datetime_for_store_users(l["received_at"]),
-            }
-        )
+    if fi_ids_nav:
+        for l in db.lots.find({"food_item_id": {"$in": fi_ids_nav}}).sort("received_at", -1).limit(50):
+            fi = db.food_items.find_one({"_id": l["food_item_id"]})
+            lots.append(
+                {
+                    "id": l["_id"],
+                    "item_name": fi["name"] if fi else "?",
+                    "lot_code": l.get("lot_code"),
+                    "received_at": l.get("received_at"),
+                    "received_at_human": format_datetime_for_store_users(l.get("received_at")),
+                }
+            )
 
-    cursor.close()
     return render_template(
         "dashboard.html",
         store=store,
@@ -807,19 +696,29 @@ def create_item():
         flash("Item name is required.", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO food_items (name, description, department, sku_number, barcode, image_url, price, store_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, description, department or None, sku_number or None, barcode or None, image_url or None, price, store_id),
-    )
-    new_id = cursor.lastrowid
+    db = get_mongo_db()
+    new_id = alloc_id("food_items")
+    doc = {
+        "_id": new_id,
+        "name": name,
+        "description": description or None,
+        "department": department or None,
+        "sku_number": sku_number or None,
+        "barcode": barcode or None,
+        "image_url": image_url or None,
+        "price": price,
+        "store_id": store_id,
+        "created_at": now_ts(),
+    }
     if not barcode:
-        cursor.execute("UPDATE food_items SET barcode = ? WHERE id = ?", (generate_barcode_for_item_id(new_id), new_id))
+        doc["barcode"] = generate_barcode_for_item_id(new_id)
     if not image_url:
-        cursor.execute("UPDATE food_items SET image_url = ? WHERE id = ?", (generate_image_url_for_item_id(new_id), new_id))
-    conn.commit()
-    cursor.close()
+        doc["image_url"] = generate_image_url_for_item_id(new_id)
+    try:
+        db.food_items.insert_one(doc)
+    except DuplicateKeyError:
+        flash("Barcode already in use; choose another.", "error")
+        return redirect(url_for("dashboard", store_id=store_id))
     flash("Item added.", "success")
     return redirect(url_for("dashboard", store_id=store_id))
 
@@ -843,24 +742,24 @@ def create_lot():
         flash("Lot ID is required (e.g., A12, BAN-042).", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO lots (food_item_id, lot_code, received_at, expires_at, quantity_label, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            food_item_id,
-            lot_code,
-            to_storage_datetime(received_at),
-            to_storage_datetime(expires_at) if expires_at else None,
-            quantity_label,
-            notes,
-        ),
-    )
-    conn.commit()
-    cursor.close()
+    db = get_mongo_db()
+    lot_id = alloc_id("lots")
+    try:
+        db.lots.insert_one(
+            {
+                "_id": lot_id,
+                "food_item_id": food_item_id,
+                "lot_code": lot_code,
+                "received_at": received_at,
+                "expires_at": expires_at,
+                "quantity_label": quantity_label,
+                "notes": notes,
+                "created_at": now_ts(),
+            }
+        )
+    except DuplicateKeyError:
+        flash("That lot ID already exists for this product.", "error")
+        return redirect(url_for("dashboard", store_id=store_id))
     flash("Lot created.", "success")
     return redirect(url_for("dashboard", store_id=store_id))
 
@@ -880,24 +779,20 @@ def create_reading():
         flash("Lot is required for a sensor reading.", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO sensor_readings (lot_id, weight_g, temp_c, humidity_rh, voc_ppb, recorded_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            lot_id,
-            weight_g,
-            temp_c,
-            humidity_rh,
-            voc_ppb,
-            to_storage_datetime(recorded_at),
-        ),
+    db = get_mongo_db()
+    rid = alloc_id("sensor_readings")
+    db.sensor_readings.insert_one(
+        {
+            "_id": rid,
+            "lot_id": lot_id,
+            "weight_g": weight_g,
+            "temp_c": temp_c,
+            "humidity_rh": humidity_rh,
+            "voc_ppb": voc_ppb,
+            "recorded_at": recorded_at,
+            "created_at": now_ts(),
+        }
     )
-    conn.commit()
-    cursor.close()
     flash("Reading logged.", "success")
     return redirect(url_for("dashboard", store_id=store_id))
 
@@ -914,21 +809,20 @@ def upsert_pricing_rules():
         flash("Item is required to set pricing rules.", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO pricing_rules (food_item_id, min_price, max_price, margin_floor_pct)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(food_item_id) DO UPDATE SET
-          min_price = excluded.min_price,
-          max_price = excluded.max_price,
-          margin_floor_pct = excluded.margin_floor_pct
-        """,
-        (food_item_id, min_price, max_price, margin_floor_pct),
-    )
-    conn.commit()
-    cursor.close()
+    db = get_mongo_db()
+    existing = db.pricing_rules.find_one({"food_item_id": food_item_id})
+    payload = {
+        "food_item_id": food_item_id,
+        "min_price": min_price,
+        "max_price": max_price,
+        "margin_floor_pct": margin_floor_pct,
+    }
+    if existing:
+        db.pricing_rules.update_one({"_id": existing["_id"]}, {"$set": payload})
+    else:
+        payload["_id"] = alloc_id("pricing_rules")
+        payload["created_at"] = now_ts()
+        db.pricing_rules.insert_one(payload)
     flash("Pricing rules saved.", "success")
     return redirect(url_for("dashboard", store_id=store_id))
 
@@ -936,23 +830,17 @@ def upsert_pricing_rules():
 @app.route("/seed_demo", methods=["POST"])
 @login_required
 def seed_demo():
-    conn = get_connection()
-    cursor = conn.cursor()
     get_or_create_default_store()
-    _ensure_partner_stores(cursor)
+    _ensure_partner_stores()
 
-    cursor.execute("SELECT id FROM stores ORDER BY id ASC")
-    store_rows = cursor.fetchall()
+    db = get_mongo_db()
     seeded_count = 0
-    for idx, row in enumerate(store_rows):
-        sid = row["id"]
-        if _store_has_items(cursor, sid):
+    for idx, row in enumerate(db.stores.find().sort("_id", 1)):
+        sid = row["_id"]
+        if _store_has_items(sid):
             continue
-        _seed_store_catalog(cursor, sid, idx)
+        _seed_store_catalog(sid, idx)
         seeded_count += 1
-
-    conn.commit()
-    cursor.close()
 
     store_id = session.get("store_id") or get_or_create_default_store()
     if seeded_count:
