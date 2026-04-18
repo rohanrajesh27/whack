@@ -1,5 +1,5 @@
 -- Table: stores
-CREATE TABLE stores (
+CREATE TABLE IF NOT EXISTS stores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     address TEXT,
@@ -7,7 +7,7 @@ CREATE TABLE stores (
 );
 
 -- Table: food_items
-CREATE TABLE food_items (
+CREATE TABLE IF NOT EXISTS food_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
