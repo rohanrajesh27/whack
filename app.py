@@ -3,8 +3,7 @@ import os
 
 try:
     from dotenv import load_dotenv
-
-    load_dotenv()
+    load_dotenv()  # Load environment variables from .env
 except ImportError:
     pass
 
@@ -22,15 +21,7 @@ import dc_grocery
 from mongo_db import get_mongo_db
 from db_mongo import alloc_id, init_mongo, now_ts
 
-
-from pymongo import MongoClient
-
-def get_mongo_db():
-    mongo_uri = os.getenv("MONGO_URI")
-    client = MongoClient(mongo_uri)
-    db = client.get_database()
-    return db
-
+from dotenv import load_dotenv
 
 app = Flask("app")
 FLASK_ENV = "development"
@@ -878,5 +869,5 @@ def favicon():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
