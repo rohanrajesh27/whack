@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VitalShelf — City health</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+  </head>
+  <body class="city-page">
+    <header class="topbar city-topbar">
+      <div class="container">
+        <div class="topbar__title">
+          <div class="topbar__kicker">VitalShelf · City view</div>
+          <h1>Neighborhood food health</h1>
+          <div class="topbar__meta">
+            <span class="pill">DC metro aggregate (demo)</span>
+            <span class="muted">Spoilage risk, markdown velocity &amp; affordability signals</span>
+          </div>
+        </div>
+        <div class="topbar__actions">
+          <a class="button button--ghost" href="{{ url_for('dashboard', store_id=session.get('store_id')) }}">Store dashboard</a>
+          <a class="button button--ghost" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container city-main stack">
+      <p class="city-lede muted">
+        Snapshot aligned with the Healthy Corners mission: track shrink and markdowns so fresh food stays affordable—without extra staff or POS integration.
+      </p>
+
+      <section class="city-kpis grid-3">
+        <article class="city-kpi" data-metric="stores">
+          <div class="city-kpi__label">Partner stores (demo DB)</div>
+          <div class="city-kpi__value" id="kpi-stores">—</div>
+        </article>
+        <article class="city-kpi" data-metric="lots">
+          <div class="city-kpi__label">Lots tracked</div>
+          <div class="city-kpi__value" id="kpi-lots">—</div>
+        </article>
+        <article class="city-kpi" data-metric="fresh">
+          <div class="city-kpi__label">Lots at “full price” health</div>
+          <div class="city-kpi__value" id="kpi-fresh">—</div>
+        </article>
+        <article class="city-kpi" data-metric="risk">
+          <div class="city-kpi__label">Spoilage / urgent risk (lots)</div>
+          <div class="city-kpi__value" id="kpi-risk">—</div>
+        </article>
+        <article class="city-kpi" data-metric="discount">
+          <div class="city-kpi__label">Active markdown lots (25% / 50% tiers)</div>
+          <div class="city-kpi__value" id="kpi-discount">—</div>
+        </article>
+        <article class="city-kpi" data-metric="expired">
+          <div class="city-kpi__label">Expired / remove</div>
+          <div class="city-kpi__value" id="kpi-expired">—</div>
+        </article>
+      </section>
+
+      <section class="panel city-chart-panel city-chart-panel--wide city-map-panel">
+        <div class="city-chart-panel__head">
+          <h2 class="city-chart-title">District of Columbia — partner footprint</h2>
+          <p class="muted city-chart-sub">
+            Store locations come from OpenStreetMap (Overpass). <strong>Health scores</strong> and <strong>weekly sales</strong> are <strong>synthetic demo data</strong> (deterministic per store) so you can visualize a city-wide VitalShelf rollout—colors = health index, dot size = sales volume.
+          </p>
+          <p class="muted city-map-meta" id="map-source-note"></p>
+        </div>
+        <div class="city-map-wrap">
+          <div class="city-map__stage">
+            <div id="dc-map" class="city-dc-map" role="region" aria-label="Map of Washington DC grocery locations"></div>
+          </div>
+          <div class="city-map-legend city-map-legend--overlay" aria-label="Map legend">
+            <div class="city-map-legend__title">Map key</div>
+            <div class="city-map-legend__item">
+              <span class="city-map-legend__label">Health index (color)</span>
+              <div class="city-map-legend__gradient" title="Red = lower, green = higher"></div>
+              <div class="city-map-legend__ticks"><span>Lower</span><span>Higher</span></div>
+            </div>
+            <div class="city-map-legend__item city-map-legend__item--size">
+              <span class="city-map-legend__label">Weekly sales (dot size)</span>
+              <div class="city-map-legend__dots">
+                <span class="city-legend-dot" style="width: 7px; height: 7px"></span>
+                <span class="city-legend-dot" style="width: 10px; height: 10px"></span>
+                <span class="city-legend-dot" style="width: 13px; height: 13px"></span>
+                <span class="city-legend-dot" style="width: 16px; height: 16px"></span>
+                <span class="city-legend-dot" style="width: 19px; height: 19px"></span>
+                <span class="city-legend-dot" style="width: 22px; height: 22px"></span>
+              </div>
+              <div class="city-map-legend__ticks"><span>Lower vol.</span><span>Higher vol.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="city-charts">
+        <div class="panel city-chart-panel">
+          <div class="city-chart-panel__head">
+            <h2 class="city-chart-title">Lot condition mix</h2>
+            <p class="muted city-chart-sub">Click legend labels to show or hide slices. Based on expiry + recommended price tier.</p>
+          </div>
+          <div class="city-chart-wrap">
+            <canvas id="chart-status" height="180"></canvas>
+          </div>
+        </div>
+        <div class="panel city-chart-panel">
+          <div class="city-chart-panel__head">
+            <h2 class="city-chart-title">Pricing tier distribution</h2>
+            <p class="muted city-chart-sub">Where dynamic pricing is steering inventory today.</p>
+          </div>
+          <div class="city-chart-wrap">
+            <canvas id="chart-markdown" height="180"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel city-chart-panel city-chart-panel--wide">
+        <div class="city-chart-panel__head city-chart-panel__head--row">
+          <div>
+            <h2 class="city-chart-title">12-week trend (indexed)</h2>
+            <p class="muted city-chart-sub">Spoilage-risk index vs. discount velocity vs. affordability proxy (SNAP-friendly mix). Use toggles to show or hide each series.</p>
+          </div>
+          <div class="city-toggles">
+            <button type="button" class="button button--ghost city-toggle is-on" data-series="spoilage">Spoilage</button>
+            <button type="button" class="button button--ghost city-toggle is-on" data-series="discount">Markdowns</button>
+            <button type="button" class="button button--ghost city-toggle is-on" data-series="afford">Affordability</button>
+          </div>
+        </div>
+        <div class="city-chart-wrap city-chart-wrap--tall">
+          <canvas id="chart-trend" height="96"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <script id="city-metrics-json" type="application/json">{{ metrics | tojson }}</script>
+    <script id="map-pins-json" type="application/json">{{ map_pins | tojson }}</script>
+    <script id="map-meta-json" type="application/json">{{ map_meta | tojson }}</script>
+    <script>
+      (function () {
+        const raw = document.getElementById("city-metrics-json");
+        const M = JSON.parse(raw.textContent);
+        const palette = {
+          bg: "rgba(11, 18, 32, 0.92)",
+          grid: "rgba(255,255,255,0.08)",
+          text: "#e7eefc",
+          accent: "#7c3aed",
+          blue: "#2563eb",
+          green: "#22c55e",
+          amber: "#f59e0b",
+          red: "#ef4444",
+          pink: "#ec4899",
+        };
+
+        const k = M.kpis || {};
+        document.getElementById("kpi-stores").textContent = M.store_count ?? "—";
+        document.getElementById("kpi-lots").textContent = M.total_lots ?? "—";
+        document.getElementById("kpi-fresh").textContent =
+          (k.freshness_ok_pct != null ? k.freshness_ok_pct + "%" : "—");
+        document.getElementById("kpi-risk").textContent = k.spoilage_at_risk ?? "—";
+        document.getElementById("kpi-discount").textContent = k.discount_lots ?? "—";
+        document.getElementById("kpi-expired").textContent = k.expired_lots ?? "—";
+
+        const sc = M.status_counts || {};
+        const statusLabels = ["OK", "Soon (25%)", "Urgent (50%)", "Expired", "No expiry data", "No price"];
+        const statusData = [
+          sc.ok || 0,
+          sc.soon || 0,
+          sc.urgent || 0,
+          sc.expired || 0,
+          sc.missing_expiry || 0,
+          sc.missing_price || 0,
+        ];
+        const statusColors = [palette.green, palette.amber, palette.red, palette.pink, "#64748b", "#475569"];
+
+        Chart.defaults.color = palette.text;
+        Chart.defaults.borderColor = palette.grid;
+
+        new Chart(document.getElementById("chart-status"), {
+          type: "doughnut",
+          data: {
+            labels: statusLabels,
+            datasets: [
+              {
+                data: statusData,
+                backgroundColor: statusColors.map((c) => c + "cc"),
+                borderWidth: 2,
+                borderColor: palette.bg,
+                hoverOffset: 12,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: { boxWidth: 10, padding: 8, font: { size: 11 } },
+              },
+              tooltip: {
+                callbacks: {
+                  label(ctx) {
+                    const t = ctx.dataset.data[ctx.dataIndex] || 0;
+                    const sum = ctx.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                    return " " + ctx.label + ": " + t + " (" + Math.round((t / sum) * 100) + "%)";
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const mm = M.markdown_mix || {};
+        const mdLabels = ["Full price", "25% markdown", "50% markdown", "Remove / donate"];
+        const mdData = [mm.full_price || 0, mm.markdown_25 || 0, mm.markdown_50 || 0, mm.remove_donate || 0];
+        new Chart(document.getElementById("chart-markdown"), {
+          type: "bar",
+          data: {
+            labels: mdLabels,
+            datasets: [
+              {
+                label: "Lots",
+                data: mdData,
+                backgroundColor: [palette.blue + "aa", palette.amber + "aa", palette.red + "aa", palette.pink + "aa"],
+                borderRadius: 10,
+                borderSkipped: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false } },
+              y: { beginAtZero: true, ticks: { precision: 0 } },
+            },
+            plugins: {
+              legend: { display: false },
+            },
+            layout: { padding: { top: 4, bottom: 4, left: 4, right: 4 } },
+          },
+        });
+
+        const W = M.weekly || {};
+        const trendCtx = document.getElementById("chart-trend");
+        const trend = new Chart(trendCtx, {
+          type: "line",
+          data: {
+            labels: W.labels || [],
+            datasets: [
+              {
+                label: "Spoilage-risk index",
+                data: W.spoilage_index || [],
+                borderColor: palette.red,
+                backgroundColor: palette.red + "22",
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+              },
+              {
+                label: "Discount velocity",
+                data: W.discount_velocity || [],
+                borderColor: palette.amber,
+                backgroundColor: "transparent",
+                tension: 0.35,
+                pointRadius: 3,
+              },
+              {
+                label: "Affordability proxy",
+                data: W.affordability_index || [],
+                borderColor: palette.green,
+                backgroundColor: "transparent",
+                tension: 0.35,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { position: "top", labels: { boxWidth: 10, padding: 10, font: { size: 11 } } },
+            },
+            layout: { padding: { top: 6, bottom: 6, left: 4, right: 4 } },
+            scales: {
+              x: { grid: { color: palette.grid } },
+              y: { beginAtZero: false, grid: { color: palette.grid } },
+            },
+          },
+        });
+
+        document.querySelectorAll(".city-toggle").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            btn.classList.toggle("is-on");
+            const key = btn.getAttribute("data-series");
+            const map = { spoilage: 0, discount: 1, afford: 2 };
+            const idx = map[key];
+            if (idx === undefined) return;
+            const meta = trend.getDatasetMeta(idx);
+            meta.hidden = !btn.classList.contains("is-on");
+            trend.update();
+          });
+        });
+
+        /* DC map */
+        const pins = JSON.parse(document.getElementById("map-pins-json").textContent);
+        const mapMeta = JSON.parse(document.getElementById("map-meta-json").textContent);
+        const note = document.getElementById("map-source-note");
+        if (note) {
+          const src = mapMeta.source || "unknown";
+          const at = mapMeta.fetched_at ? " · Updated " + mapMeta.fetched_at : "";
+          note.textContent = "Data source: " + src + at + " · " + (pins.length || 0) + " locations shown.";
+        }
+
+        const dcSouthWest = [38.7916, -77.1198];
+        const dcNorthEast = [38.9956, -76.9093];
+        const map = L.map("dc-map", {
+          /* Integer zoom + calmer wheel = fewer fractional tile rescales (feels less choppy). */
+          zoomSnap: 1,
+          zoomDelta: 1,
+          scrollWheelZoom: "center",
+          wheelDebounceTime: 24,
+          wheelPxPerZoomLevel: 110,
+          preferCanvas: true,
+          fadeAnimation: false,
+          zoomAnimation: true,
+          bounceAtZoomLimits: false,
+          inertia: true,
+          inertiaDeceleration: 3000,
+          inertiaMaxSpeed: 4200,
+        }).setView([38.9072, -77.0369], 12);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors",
+          keepBuffer: 2,
+          updateWhenZooming: true,
+          updateWhenIdle: false,
+        }).addTo(map);
+
+        function healthHue(score) {
+          const s = Math.max(0, Math.min(100, Number(score) || 0));
+          return (s / 100) * 118;
+        }
+        function healthFillColor(score) {
+          const h = healthHue(score);
+          return "hsl(" + h + ", 82%, 46%)";
+        }
+        function healthStrokeColor(score) {
+          const h = healthHue(score);
+          return "hsl(" + h + ", 88%, 24%)";
+        }
+        function tierLabel(tier) {
+          const labels = {
+            critical: "Critical",
+            at_risk: "At risk",
+            fair: "Fair",
+            good: "Good",
+            excellent: "Excellent",
+          };
+          return labels[tier] || tier || "—";
+        }
+        const salesVals = (pins || []).map((p) => Number(p.weekly_sales_usd) || 0);
+        const sMax = Math.max(...salesVals, 1);
+        const sMin = Math.min(...salesVals, sMax);
+        function radiusForSales(v) {
+          const n = Number(v) || 0;
+          const t = sMax <= sMin ? 0.5 : (n - sMin) / (sMax - sMin);
+          return 4.5 + Math.sqrt(Math.max(0, Math.min(1, t))) * 12.5;
+        }
+        const money = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        });
+
+        function escHtml(s) {
+          return String(s == null ? "" : s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+        function barWidthPct(v) {
+          const n = Math.max(0, Math.min(100, Number(v) || 0));
+          return "width:" + n + "%";
+        }
+        function buildStorePopup(p) {
+          const hi = p.health_index != null ? p.health_index : "—";
+          const factors = p.health_factors || {};
+          const wpts = p.health_weighted_points || {};
+          const weights = mapMeta.health_weights || {};
+          const labels = mapMeta.health_factor_labels || {};
+          const order = [
+            "freshness_uptime",
+            "markdown_discipline",
+            "cold_chain_stability",
+            "community_access",
+          ];
+          let rows = "";
+          for (const key of order) {
+            const score = factors[key];
+            if (score == null) continue;
+            const w = weights[key];
+            const pts = wpts[key];
+            const pctWt = w != null ? Math.round(Number(w) * 100) : "—";
+            rows +=
+              '<div class="map-popup-factor">' +
+              '<div class="map-popup-factor__head">' +
+              '<span class="map-popup-factor__name">' +
+              escHtml(labels[key] || key) +
+              "</span>" +
+              '<span class="map-popup-factor__nums">' +
+              escHtml(score) +
+              "/100 · " +
+              escHtml(pctWt) +
+              '% wt · <span class="map-popup-factor__pts">' +
+              escHtml(pts) +
+              " pts</span></span></div>" +
+              '<div class="map-popup-bar"><span class="map-popup-bar__fill" style="' +
+              barWidthPct(score) +
+              '"></span></div></div>';
+          }
+          const raw = p.health_index_raw != null ? p.health_index_raw : "—";
+          return (
+            '<div class="map-popup-scroll">' +
+            '<div class="map-popup">' +
+            '<div class="map-popup__title">' +
+            escHtml(p.name || "Store") +
+            "</div>" +
+            '<div class="map-popup__meta">' +
+            escHtml(p.shop || "grocery") +
+            "</div>" +
+            '<div class="map-popup__index">' +
+            '<span class="map-popup__index-label">Health index</span>' +
+            '<span class="map-popup__index-value">' +
+            escHtml(hi) +
+            "</span>" +
+            '<span class="map-popup__index-tier">' +
+            escHtml(tierLabel(p.health_tier)) +
+            "</span></div>" +
+            '<div class="map-popup__sales">Weekly sales (demo): <strong>' +
+            money.format(Number(p.weekly_sales_usd) || 0) +
+            "</strong></div>" +
+            '<div class="map-popup__breakdown">' +
+            '<div class="map-popup__breakdown-title">Index breakdown (demo)</div>' +
+            "<p class=\"map-popup__formula\">Each row is a 0–100 sub-score (higher is better). " +
+            "Contribution = weight × score. Health index rounds Σ contributions to an integer, then clips to the 15–99 range.</p>" +
+            rows +
+            '<div class="map-popup__raw">Σ contributions (before clip): <strong>' +
+            escHtml(raw) +
+            "</strong></div></div></div></div>"
+          );
+        }
+
+        /* Wider canvas bleed reduces full redraws while panning small distances. */
+        const markerCanvas = L.canvas({ padding: 2 });
+        const markers = [];
+        /* No Leaflet maxHeight: it sets inline height on .leaflet-popup-content and breaks scrolling on shorter viewports. Scroll lives on .map-popup-scroll instead. */
+        const storePopupOptions = {
+          maxWidth: 480,
+          className: "city-store-popup",
+          autoPan: true,
+          autoPanPaddingTopLeft: [12, 12],
+          autoPanPaddingBottomRight: [12, 12],
+        };
+        (pins || []).forEach((p) => {
+          if (p.lat == null || p.lon == null) return;
+          const hi = p.health_index != null ? p.health_index : 50;
+          const m = L.circleMarker([p.lat, p.lon], {
+            renderer: markerCanvas,
+            radius: radiusForSales(p.weekly_sales_usd),
+            color: healthStrokeColor(hi),
+            weight: 2,
+            fillColor: healthFillColor(hi),
+            fillOpacity: 0.88,
+          });
+          m.bindPopup(buildStorePopup(p), storePopupOptions);
+          m.addTo(map);
+          markers.push(m);
+        });
+
+        if (markers.length) {
+          const fg = L.featureGroup(markers);
+          map.fitBounds(fg.getBounds().pad(0.12));
+        } else {
+          map.fitBounds([dcSouthWest, dcNorthEast], { padding: [20, 20] });
+        }
+
+        function refreshMapSize() {
+          try {
+            map.invalidateSize({ animate: false });
+          } catch (e) {
+            /* ignore */
+          }
+        }
+        refreshMapSize();
+        requestAnimationFrame(refreshMapSize);
+        window.addEventListener("resize", refreshMapSize);
+      })();
+    </script>
+  </body>
+</html>

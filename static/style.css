@@ -64,15 +64,20 @@ a.button {
 /* Auth */
 
 .auth-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .auth-left,
 .auth-right {
   display: grid;
   padding: 28px;
+  min-height: 0;
 }
 
 /* Top-align the form card so login ↔ signup only grows downward; no vertical jump. */
@@ -81,11 +86,16 @@ a.button {
   align-items: start;
   align-content: start;
   padding-top: clamp(32px, 7vh, 72px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .auth-right {
   place-items: stretch;
   padding: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .auth-card {
@@ -109,6 +119,11 @@ a.button {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.auth-brand > div {
+  min-width: 0;
 }
 
 .auth-mark {
@@ -125,16 +140,22 @@ a.button {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .auth-title {
   margin: 0;
   font-size: 28px;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .auth-subtitle {
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .auth-toggle {
@@ -157,6 +178,9 @@ a.button {
   cursor: pointer;
   font-weight: 600;
   transition: background 220ms ease, color 220ms ease, transform 220ms ease;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: center;
 }
 
 .auth-tab:hover {
@@ -175,6 +199,8 @@ a.button {
   font-weight: 600;
   opacity: 0.92;
   transition: opacity 240ms ease, transform 240ms ease;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .auth-form {
@@ -206,14 +232,24 @@ a.button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .check {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 10px;
   user-select: none;
   color: rgba(231, 238, 252, 0.85);
+}
+
+.check span {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .check input {
@@ -242,9 +278,15 @@ button.button.auth-cta {
   font-weight: 600;
 }
 
+.field label {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .input-wrap {
   position: relative;
   display: grid;
+  min-width: 0;
 }
 
 .input-icon {
@@ -259,11 +301,8 @@ button.button.auth-cta {
 
 .input-wrap input {
   padding-left: 36px !important;
-}
-
-.auth-right {
-  position: relative;
-  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Right Panel (media slideshow) */
@@ -358,15 +397,19 @@ button.button.auth-cta {
   position: absolute;
   bottom: 60px;
   left: 50px;
+  right: 24px;
+  max-width: min(320px, calc(100% - 74px));
   color: white;
   z-index: 3;
-  max-width: 320px;
   padding: 12px 14px;
   border-radius: 14px;
   background: rgba(11, 18, 32, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
 }
 
 .media-overlay h2 {
@@ -376,6 +419,8 @@ button.button.auth-cta {
   margin: 0 0 8px 0;
   letter-spacing: -0.02em;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .media-overlay p {
@@ -383,6 +428,8 @@ button.button.auth-cta {
   margin: 0;
   opacity: 0.9;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 920px) {
@@ -456,6 +503,67 @@ main.container.stack {
   margin-top: 8px;
 }
 
+.topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.store-picker {
+  margin: 0;
+}
+
+.store-picker__field {
+  margin: 0;
+}
+
+.store-picker__field .label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.store-picker__select {
+  min-width: min(260px, 72vw);
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.batch-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.batch-summary__chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.batch-summary__dept {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(231, 238, 252, 0.88);
+}
+
+.batch-summary__nums {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -479,10 +587,523 @@ main.container.stack {
 
 @media (min-width: 980px) {
   .grid-2 {
-    grid-template-columns: 1.5fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 16px;
     align-items: start;
   }
+
+  .panel .grid-2 {
+    grid-template-columns: 1.5fr 1fr;
+  }
+
+  /* Owner dashboard: catalog + inventory vs. action panels — keep a floor width for the right column */
+  .store-dashboard__grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
+  }
+
+  .store-dashboard__grid > .panel:first-child,
+  .store-dashboard__grid > .stack {
+    min-width: 0;
+  }
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 720px) {
+  .grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* City health dashboard */
+.city-page {
+  min-height: 100vh;
+  scroll-behavior: smooth;
+  /* Map tile height + popup scroll cap; keeps the footprint map scaled to the viewport */
+  --city-map-height: min(300px, 42dvh);
+}
+
+@media (max-width: 899px) {
+  .city-page {
+    --city-map-height: min(260px, 46dvh);
+  }
+}
+
+.city-main {
+  padding-bottom: 48px;
+}
+
+.city-lede {
+  max-width: 52rem;
+  margin: 0;
+}
+
+.city-topbar .topbar__meta {
+  flex-wrap: wrap;
+}
+
+.city-kpi {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px 16px;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.city-kpi:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 58, 237, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.city-kpi__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.city-kpi__value {
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.city-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .city-charts {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+}
+
+.city-chart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.city-chart-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.city-chart-panel__head {
+  margin-bottom: 10px;
+}
+
+.city-chart-panel__head--row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .city-chart-panel__head--row {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.city-chart-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.city-chart-sub {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.city-chart-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  width: 100%;
+  min-height: 200px;
+  max-height: min(260px, 40vh);
+}
+
+.city-chart-wrap--tall {
+  min-height: 220px;
+  max-height: min(300px, 44vh);
+}
+
+.city-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.city-toggle.is-on {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.45);
+  color: var(--text);
+}
+
+/* Let popups extend past the map box; clipping hid content and tips. */
+.city-map-panel {
+  overflow: visible;
+}
+
+.city-map-wrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.city-map__stage {
+  min-width: 0;
+  position: relative;
+}
+
+@media (min-width: 900px) {
+  .city-map-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 252px);
+    gap: 0;
+    align-items: stretch;
+  }
+
+  .city-map__stage {
+    align-self: start;
+  }
+
+  .city-dc-map,
+  .city-dc-map.leaflet-container {
+    border-radius: 11px 0 0 11px;
+  }
+
+  .city-map-legend--overlay {
+    position: static;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    width: auto;
+    max-width: none;
+    align-self: stretch;
+    justify-content: center;
+    pointer-events: auto;
+    border-radius: 0 11px 11px 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+  }
+}
+
+.city-map-meta {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.city-map-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.city-map-legend--overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 28px;
+  z-index: 1000;
+  width: min(220px, calc(100% - 20px));
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(11, 18, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.city-map-legend__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(231, 238, 252, 0.85);
+  margin-bottom: 2px;
+}
+
+.city-map-legend__item {
+  flex: none;
+  max-width: none;
+}
+
+.city-map-legend__label {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.city-map-legend__gradient {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    hsl(0, 82%, 46%),
+    hsl(39, 90%, 48%),
+    hsl(118, 82%, 42%)
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.city-map-legend__ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.city-map-legend__dots {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 1px;
+  gap: 0;
+}
+
+.city-legend-dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: hsl(118, 82%, 46%);
+  border: 2px solid hsl(118, 88%, 24%);
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.city-dc-map {
+  height: var(--city-map-height);
+  width: 100%;
+  border-radius: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 1;
+  /* Let Leaflet set touch-action / layers; extra translateZ+isolation caused janky repaints on some GPUs. */
+}
+
+/* Keep Leaflet’s default overflow:hidden on the container so tiles stay inside the map box. */
+.city-dc-map.leaflet-container {
+  outline: none;
+}
+
+/* Popup shell: explicit dark theme so text isn’t low-contrast on Leaflet defaults */
+.leaflet-popup.city-store-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  background: #0f1b33;
+  color: #e7eefc;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  padding: 0;
+}
+
+.leaflet-popup.city-store-popup .leaflet-popup-tip {
+  background: #0f1b33;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.35);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #e7eefc !important;
+  font-size: 22px;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  line-height: 26px;
+  padding: 0;
+  top: 8px;
+  right: 8px;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.city-store-popup .leaflet-popup-content {
+  margin: 14px 40px 14px 16px;
+  min-width: min(300px, 85vw);
+  width: max-content;
+  max-width: min(480px, calc(100vw - 32px));
+  overflow: visible;
+  color: #e7eefc;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/*
+ * Scrollport sized to stay inside the map frame (matches --city-map-height on .city-page) so popups
+ * aren’t clipped by Leaflet while still fitting the tile area.
+ */
+.leaflet-popup.city-store-popup .map-popup-scroll {
+  box-sizing: border-box;
+  max-height: min(calc(var(--city-map-height, 300px) * 0.62), 300px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding-right: 2px;
+  margin-right: -2px;
+}
+
+.map-popup {
+  color: #e7eefc;
+}
+
+.map-popup__title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+  line-height: 1.2;
+  color: #f1f5ff;
+}
+
+.map-popup__meta {
+  font-size: 0.85rem;
+  color: rgba(231, 238, 252, 0.82);
+  margin: 0 0 12px;
+  text-transform: capitalize;
+}
+
+.map-popup__index {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.map-popup__index-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(231, 238, 252, 0.72);
+  width: 100%;
+}
+
+.map-popup__index-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #f1f5ff;
+}
+
+.map-popup__index-tier {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(231, 238, 252, 0.9);
+}
+
+.map-popup__sales {
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+  color: rgba(231, 238, 252, 0.92);
+}
+
+.map-popup__breakdown-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(231, 238, 252, 0.88);
+  margin-bottom: 6px;
+}
+
+.map-popup__formula {
+  font-size: 0.78rem;
+  color: rgba(231, 238, 252, 0.78);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.map-popup-factor {
+  margin-bottom: 10px;
+}
+
+.map-popup-factor__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+@media (min-width: 320px) {
+  .map-popup-factor__head {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 8px;
+  }
+}
+
+.map-popup-factor__name {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #f1f5ff;
+}
+
+.map-popup-factor__nums {
+  font-size: 0.75rem;
+  color: rgba(231, 238, 252, 0.8);
+  text-align: right;
+}
+
+.map-popup-factor__pts {
+  color: #f1f5ff;
+  font-weight: 700;
+}
+
+.map-popup-bar {
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.map-popup-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #7c3aed, #2563eb);
+  max-width: 100%;
+}
+
+.map-popup__raw {
+  font-size: 0.78rem;
+  color: rgba(231, 238, 252, 0.78);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .panel {
@@ -533,6 +1154,7 @@ main.container.stack {
 
 .sub-container {
   width: 100%;
+  min-width: 0;
 }
 
 .panel__divider {
@@ -603,6 +1225,7 @@ main.container.stack {
 }
 
 .table-scroll {
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -627,7 +1250,7 @@ main.container.stack {
   display: grid;
   gap: 8px;
   width: 100%;
-  min-width: 980px; /* forces horizontal scroll on narrow views */
+  min-width: 980px; /* scroll inside .table-scroll when the grid column is narrower */
 }
 
 .table__row {
@@ -648,14 +1271,20 @@ main.container.stack {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Inventory table (lower): lot, expires, days left, latest weight, recommendation */
+/* Inventory table: product, type, lot, expires, days left, weight, recommendation */
+.table.table--inventory {
+  min-width: 1180px;
+}
+
 .table--inventory .table__row {
   grid-template-columns:
-    minmax(0, 0.9fr)
-    minmax(0, 0.9fr)
-    minmax(0, 0.7fr)
-    minmax(0, 0.9fr)
-    minmax(0, 1.4fr);
+    minmax(0, 1.15fr)
+    minmax(0, 0.8fr)
+    minmax(0, 0.95fr)
+    minmax(0, 0.72fr)
+    minmax(0, 0.55fr)
+    minmax(0, 0.72fr)
+    minmax(0, 1.35fr);
 }
 
 .table__row > * {

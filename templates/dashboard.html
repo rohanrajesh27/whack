@@ -19,7 +19,22 @@
             {% endif %}
           </div>
         </div>
-        <div class="topbar__actions">
+        <div class="topbar__actions topbar__actions--wrap">
+          <form method="get" action="{{ url_for('dashboard') }}" class="store-picker">
+            <label class="inline-field store-picker__field">
+              <span class="label">Store</span>
+              <select name="store_id" class="store-picker__select" onchange="this.form.submit()" aria-label="Switch store">
+                {% for s in stores_nav %}
+                  <option value="{{ s['id'] }}" {% if store and s['id'] == store['id'] %}selected{% endif %}>
+                    {{ s["name"] }}
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+          </form>
+          {% if city_admin %}
+            <a class="button button--ghost" href="{{ url_for('city_health') }}">City metrics</a>
+          {% endif %}
           <form method="post" action="{{ url_for('seed_demo') }}">
             <button class="button button--ghost" type="submit">Seed demo data</button>
           </form>
@@ -39,12 +54,23 @@
         {% endif %}
       {% endwith %}
 
-      <section class="grid-2">
+      <section class="grid-2 store-dashboard__grid">
         <div class="panel">
           <div class="panel__header">
             <h2>SKU catalog</h2>
-            <p class="muted">Pure product (SKU) info. Lots/readings live in the inventory table below.</p>
+            <p class="muted">Product types (departments) and SKUs. Each SKU can have multiple delivery batches (lots) in inventory.</p>
           </div>
+
+          {% if department_batch_summary %}
+            <div class="batch-summary" aria-label="Batches by product type">
+              {% for row in department_batch_summary %}
+                <div class="batch-summary__chip">
+                  <span class="batch-summary__dept">{{ row.department }}</span>
+                  <span class="batch-summary__nums">{{ row.sku_count }} SKU{% if row.sku_count != 1 %}s{% endif %} · {{ row.batch_count }} batch{% if row.batch_count != 1 %}es{% endif %}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
 
           <div class="sub-container">
             <form method="get" action="{{ url_for('dashboard') }}" class="table-controls table-controls--boxed">
@@ -148,6 +174,8 @@
             <div class="table-scroll">
               <div class="table table--inventory">
             <div class="table__row table__row--head">
+              <div>Product</div>
+              <div>Type</div>
               <div>Lot</div>
               <div>Expires</div>
               <div>Days left</div>
@@ -157,13 +185,15 @@
 
             {% if inventory_rows|length == 0 %}
               <div class="empty">
-                <div class="empty__title">No items yet</div>
-                <div class="empty__body">Add an item on the right, or click “Seed demo data”.</div>
+                <div class="empty__title">No batches yet</div>
+                <div class="empty__body">Add SKUs and lots on the right, or click “Seed demo data” for sample product types and batches.</div>
               </div>
             {% endif %}
 
             {% for r in inventory_rows %}
               <div class="table__row">
+                <div class="mono" title="{{ r.item_name }}">{{ r.item_name_short }}</div>
+                <div>{{ r.department if r.department else "—" }}</div>
                 <div class="mono">
                   {{ r.lot_code }}
                 </div>

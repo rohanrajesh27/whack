@@ -1,0 +1,10 @@
+[
+  {"lat": 38.9072, "lon": -77.0369, "name": "Downtown (demo pin)", "shop": "convenience", "source": "fallback"},
+  {"lat": 38.9200, "lon": -77.0320, "name": "Columbia Heights area (demo)", "shop": "supermarket", "source": "fallback"},
+  {"lat": 38.8980, "lon": -77.0230, "name": "Navy Yard area (demo)", "shop": "convenience", "source": "fallback"},
+  {"lat": 38.9310, "lon": -77.0770, "name": "Petworth area (demo)", "shop": "greengrocer", "source": "fallback"},
+  {"lat": 38.8840, "lon": -77.0970, "name": "Georgetown area (demo)", "shop": "supermarket", "source": "fallback"},
+  {"lat": 38.8600, "lon": -76.9950, "name": "Anacostia area (demo)", "shop": "convenience", "source": "fallback"},
+  {"lat": 38.9540, "lon": -77.0830, "name": "Brightwood area (demo)", "shop": "convenience", "source": "fallback"},
+  {"lat": 38.8730, "lon": -77.0120, "name": "Capitol Hill area (demo)", "shop": "supermarket", "source": "fallback"}
+]
