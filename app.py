@@ -1,4 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
+import os
 
 try:
     from dotenv import load_dotenv
@@ -866,7 +867,6 @@ def favicon():
     return response
 
 
-if __name__ == '__main__':
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "5000"))
-    app.run(host=host, port=port, debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
