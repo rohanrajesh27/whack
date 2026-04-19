@@ -23,6 +23,8 @@ import torch
 from PIL import Image
 from transformers import BlipProcessor, BlipForConditionalGeneration
 
+from ripeness_keywords import infer_ripeness_score
+
 
 # ── Model setup (loaded once on import) ─────────────────────────────────────
 
@@ -52,50 +54,6 @@ def generate_caption(image: Image.Image) -> str:
     state_caption = _blip_processor.decode(out[0], skip_special_tokens=True)
 
     return f"{color_caption}. {state_caption}."
-
-
-# ── Scoring (weighted keyword vote across all 5 stages) ─────────────────────
-
-_STAGE_KEYWORDS: dict[int, list[str]] = {
-    1: [
-        "green", "bright green", "unripe", "immature", "hard",
-        "not ripe", "not yet ripe", "raw", "firm green",
-    ],
-    2: [
-        "yellow-green", "green-yellow", "slightly green", "mostly green",
-        "turning yellow", "almost ripe", "slightly unripe", "firm yellow",
-    ],
-    3: [
-        "yellow", "bright yellow", "ripe", "ready to eat", "mature",
-        "golden", "perfectly ripe", "fresh yellow",
-    ],
-    4: [
-        "brown spots", "spotted", "freckled", "very ripe", "speckled",
-        "brown spotted", "fully ripe", "sweet", "soft",
-    ],
-    5: [
-        "brown", "black", "mushy", "overripe", "over-ripe", "over ripe",
-        "rotten", "spoiled", "rotting", "decayed", "dark brown",
-        "mostly brown", "too ripe", "bad",
-    ],
-}
-
-
-def infer_ripeness_score(caption: str) -> int:
-    """Map a caption to a 1-5 ripeness score via weighted keyword voting.
-
-    Ties break toward the higher stage (more conservative for pricing).
-    Defaults to 3 (ripe) if no keywords match.
-    """
-    text = caption.lower()
-    scores = {stage: 0 for stage in _STAGE_KEYWORDS}
-    for stage, keywords in _STAGE_KEYWORDS.items():
-        for kw in keywords:
-            if kw in text:
-                scores[stage] += 1
-    if sum(scores.values()) == 0:
-        return 3
-    return max(scores, key=lambda s: (scores[s], s))
 
 
 # ── Public entry point ──────────────────────────────────────────────────────

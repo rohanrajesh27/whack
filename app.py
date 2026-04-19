@@ -13,11 +13,13 @@ import random
 import datetime
 from collections import defaultdict
 from functools import wraps
+from typing import Optional
 
 from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash
 
 import dc_grocery
+from demo_seed import seed_store_catalog_if_empty
 from mongo_db import get_mongo_db
 from db_mongo import alloc_id, init_mongo, now_ts
 
@@ -41,6 +43,8 @@ def _with_id(doc):
 
 
 _LOGS_MAX_ENTRIES = 100
+# Next POST with flag=0 (telemetry app) is merged into one log row with the latest flag=1 camera POST.
+INGEST_PENDING_DOC_ID = "pending_camera"
 
 
 def _trim_logs_collection(coll) -> None:
@@ -54,25 +58,57 @@ def _trim_logs_collection(coll) -> None:
         coll.delete_many({"_id": {"$in": ids}})
 
 
+def _payload_flag_value(payload) -> Optional[int]:
+    """First-field ``flag`` value (0 or 1) if present, else None."""
+    if not isinstance(payload, dict) or not payload:
+        return None
+    first_key, first_val = next(iter(payload.items()))
+    if first_key != "flag" or first_val not in (0, 1):
+        return None
+    return int(first_val)
+
+
 @app.route("/logs")
 def logs():
-    # Show a simple page listing recent POST payloads where the first key is 'flag' and value is 1.
+    """Show merged camera + telemetry rows (newest pairs last in chronological list)."""
     db = get_mongo_db()
     logs_collection = db["logs"]
 
-    # Find recent entries where the POST body (stored as 'payload') is a dict and its first key/value are 'flag':1
-    entries = logs_collection.find().sort("ts", -1).limit(100)
+    entries = logs_collection.find().sort("ts", 1)
     results = []
     for entry in entries:
         payload = entry.get("payload")
-        if isinstance(payload, dict) and payload:
-            first_key, first_val = next(iter(payload.items()))
-            if first_key == 'flag' and first_val == 1:
-                results.append({
-                    "payload": payload,
+        if not isinstance(payload, dict):
+            continue
+        if "camera" in payload and "sensor" in payload:
+            results.append(
+                {
+                    "kind": "pair",
                     "ts": entry.get("ts"),
-                })
-    # Render logs.html, expecting it to show .payload and .ts
+                    "camera": payload["camera"],
+                    "sensor": payload["sensor"],
+                }
+            )
+            continue
+        if "sensor" in payload and "camera" not in payload:
+            results.append(
+                {
+                    "kind": "sensor_only",
+                    "ts": entry.get("ts"),
+                    "sensor": payload.get("sensor"),
+                }
+            )
+            continue
+        flag_val = _payload_flag_value(payload)
+        if flag_val is not None:
+            results.append(
+                {
+                    "kind": "flat",
+                    "ts": entry.get("ts"),
+                    "flag": flag_val,
+                    "payload": payload,
+                }
+            )
     return render_template("logs.html", logs=results)
 
 @app.route('/receive-data', methods=['POST'])
@@ -85,15 +121,32 @@ def receive_data():
         return jsonify(status='error', message='JSON body must be a non-empty object'), 400
 
     first_key, first_val = next(iter(data.items()))
-    if first_key == 'flag' and first_val == 1:
+    if first_key == "flag" and first_val == 1:
         try:
-            coll = get_mongo_db()["logs"]
-            coll.insert_one({"ts": now_ts(), "payload": dict(data)})
+            get_mongo_db()["ingest_pending"].replace_one(
+                {"_id": INGEST_PENDING_DOC_ID},
+                {"_id": INGEST_PENDING_DOC_ID, "payload": dict(data), "ts": now_ts()},
+                upsert=True,
+            )
+        except Exception:
+            pass
+        return render_template("receive_data_display.html", payload=data)
+
+    if first_key == "flag" and first_val == 0:
+        try:
+            db = get_mongo_db()
+            pend = db["ingest_pending"].find_one({"_id": INGEST_PENDING_DOC_ID})
+            coll = db["logs"]
+            if pend and isinstance(pend.get("payload"), dict):
+                merged = {"camera": dict(pend["payload"]), "sensor": dict(data)}
+                coll.insert_one({"ts": now_ts(), "payload": merged})
+                db["ingest_pending"].delete_one({"_id": INGEST_PENDING_DOC_ID})
+            else:
+                coll.insert_one({"ts": now_ts(), "payload": {"sensor": dict(data)}})
             _trim_logs_collection(coll)
         except Exception:
-            # Still show confirmation page if logging fails (e.g. DB misconfigured).
             pass
-        return render_template('receive_data_display.html', payload=data)
+        return jsonify(status="success", message="Logged (telemetry merged if camera was pending)."), 200
 
     # Legacy: pinger-style payloads (weight + message)
     if 'weight' in data and 'message' in data:
@@ -104,8 +157,8 @@ def receive_data():
         ), 200
 
     return jsonify(
-        status='error',
-        message='First JSON field must be "flag" with value 1, or send weight and message.',
+        status="error",
+        message='First JSON field must be "flag" with value 0 or 1, or send weight and message.',
     ), 400
 
 
@@ -350,132 +403,9 @@ def get_or_create_default_store():
     return sid
 
 
-# Demo catalogs: (name, description, department / product type, base price)
-_DEMO_CATALOG_VARIANTS = [
-    [
-        ("Bananas", "Organic bunches", "Produce", 0.79),
-        ("Baby spinach", "5 oz clamshell", "Produce", 3.49),
-        ("Avocados", "Hass, ripe", "Produce", 1.29),
-        ("Whole milk 1 gal", "Vitamin D", "Dairy", 4.29),
-        ("Greek yogurt", "Plain 32 oz", "Dairy", 5.99),
-        ("Sourdough loaf", "Bakery artisan", "Bakery", 6.5),
-        ("Eggs dozen", "Large cage-free", "Dairy", 4.99),
-        ("Orange juice", "NFC half gallon", "Beverages", 3.99),
-    ],
-    [
-        ("Chicken thighs", "Bone-in family pack", "Meat", 8.99),
-        ("Ground beef", "85% lean", "Meat", 6.49),
-        ("Frozen berries", "Mixed 12 oz", "Frozen", 4.29),
-        ("Frozen peas", "Steamable bag", "Frozen", 2.19),
-        ("Cheddar block", "Sharp 8 oz", "Dairy", 3.99),
-        ("Butter quarters", "Unsalted", "Dairy", 4.49),
-        ("Iced tea gallon", "Unsweetened", "Beverages", 2.99),
-        ("Corn tortillas", "30 count", "Pantry", 2.79),
-    ],
-    [
-        ("Long-grain rice", "2 lb bag", "Pantry", 3.49),
-        ("Black beans", "Canned low-sodium", "Pantry", 1.29),
-        ("Pasta penne", "1 lb dry", "Pantry", 1.99),
-        ("Tomatoes on vine", "Local when available", "Produce", 2.99),
-        ("Romaine hearts", "3-pack", "Produce", 3.19),
-        ("Almond milk", "Unsweetened half gal", "Beverages", 3.49),
-        ("Frozen pizza", "Cheese thin crust", "Frozen", 5.99),
-        ("Bagels", "6-pack plain", "Bakery", 3.29),
-    ],
-]
-
-_DEMO_PARTNER_STORES = [
-    ("Healthy Corners — Georgia Ave", "1200 Georgia Ave NW, Washington, DC"),
-    ("South Capitol Fresh Market", "1015 Half St SE, Washington, DC"),
-    ("Anacostia Pantry Co-op", "1800 Good Hope Rd SE, Washington, DC"),
-]
-
-
-def _ensure_partner_stores():
-    db = get_mongo_db()
-    for name, address in _DEMO_PARTNER_STORES:
-        if db.stores.find_one({"name": name}) is None:
-            sid = alloc_id("stores")
-            db.stores.insert_one({"_id": sid, "name": name, "address": address, "created_at": now_ts()})
-
-
-def _seed_store_catalog(store_id, variant_index):
-    """Insert SKUs, lots, and sample readings. Caller ensures store has no items yet."""
-    db = get_mongo_db()
-    catalog = _DEMO_CATALOG_VARIANTS[variant_index % len(_DEMO_CATALOG_VARIANTS)]
-    now = datetime.datetime.now().replace(microsecond=0)
-    food_item_ids = []
-
-    for name, desc, department, price in catalog:
-        fid = alloc_id("food_items")
-        db.food_items.insert_one(
-            {
-                "_id": fid,
-                "name": name,
-                "description": desc,
-                "department": department,
-                "sku_number": None,
-                "barcode": generate_barcode_for_item_id(fid),
-                "image_url": generate_image_url_for_item_id(fid),
-                "price": price,
-                "store_id": store_id,
-                "created_at": now_ts(),
-            }
-        )
-        food_item_ids.append(fid)
-
-        batch_specs = [
-            (0, 36, 5, "Case A / primary"),
-            (1, 12, 1, "Case B / backup"),
-        ]
-        for batch_n, hours_ago, days_until_exp, qty_note in batch_specs:
-            received = now - datetime.timedelta(hours=hours_ago + batch_n * 4)
-            expires = now + datetime.timedelta(days=days_until_exp, hours=batch_n * 2)
-            lot_code = f"ST{store_id}-I{fid}B{batch_n + 1}"
-            lot_id = alloc_id("lots")
-            db.lots.insert_one(
-                {
-                    "_id": lot_id,
-                    "food_item_id": fid,
-                    "lot_code": lot_code,
-                    "received_at": received,
-                    "expires_at": expires,
-                    "quantity_label": qty_note,
-                    "notes": f"Demo batch · {department}",
-                    "created_at": now_ts(),
-                }
-            )
-            weight_g = 1100.0 + (fid % 7) * 35 + batch_n * 120
-            rid = alloc_id("sensor_readings")
-            db.sensor_readings.insert_one(
-                {
-                    "_id": rid,
-                    "lot_id": lot_id,
-                    "weight_g": weight_g,
-                    "temp_c": 3.5 + batch_n * 0.4,
-                    "humidity_rh": 52.0 + batch_n * 2,
-                    "voc_ppb": 420 + batch_n * 40,
-                    "recorded_at": now,
-                    "created_at": now_ts(),
-                }
-            )
-
-    for fid in food_item_ids[:3]:
-        fi = db.food_items.find_one({"_id": fid})
-        base = float(fi.get("price") or 0) if fi else 0.0
-        if base <= 0:
-            continue
-        pr_id = alloc_id("pricing_rules")
-        db.pricing_rules.insert_one(
-            {
-                "_id": pr_id,
-                "food_item_id": fid,
-                "min_price": round(base * 0.35, 2),
-                "max_price": round(base * 1.15, 2),
-                "margin_floor_pct": 12.0,
-                "created_at": now_ts(),
-            }
-        )
+def _seed_store_catalog(store_id, variant_index=0):
+    """Insert minimal SKUs + batches (see demo_seed) if this store has no items. variant_index ignored."""
+    return seed_store_catalog_if_empty(store_id)
 
 
 def _store_has_items(store_id):
@@ -667,17 +597,24 @@ def dashboard():
         max_price = pr.get("max_price") if pr else None
 
         sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", -1)])
-        latest_weight_g = sr.get("weight_g") if sr else None
+        latest_weight_g = lot.get("weight_grams")
+        if latest_weight_g is None and sr:
+            latest_weight_g = sr.get("weight_g")
 
-        expires_at = lot.get("expires_at")
-        days_left = None
-        if expires_at:
+        expires_at = lot.get("expires_at") or lot.get("expiration")
+        days_left = lot.get("days_left")
+        if days_left is None and expires_at:
             exp_dt = expires_at if isinstance(expires_at, datetime.datetime) else parse_storage_datetime(expires_at)
             if exp_dt is not None:
                 days_left = (exp_dt.date() - now.date()).days
 
         rec = compute_markdown_recommendation(fi.get("price"), days_left)
-        recommended_price = rec["recommended_price"]
+        batch_price = lot.get("recommended_price")
+        if batch_price is not None:
+            recommended_price = float(batch_price)
+            rec = {**rec, "recommended_price": recommended_price, "label": "Batch stored"}
+        else:
+            recommended_price = rec["recommended_price"]
         if recommended_price is not None:
             if min_price is not None and recommended_price < min_price:
                 recommended_price = min_price
@@ -694,7 +631,7 @@ def dashboard():
                 "item_name_short": abbreviate_product_name(fi.get("name"), 22),
                 "department": fi.get("department"),
                 "received_at_human": format_datetime_for_store_users(lot.get("received_at")),
-                "expires_at_human": format_date_for_store_users(lot.get("expires_at")),
+                "expires_at_human": format_date_for_store_users(lot.get("expires_at") or lot.get("expiration")),
                 "days_left": days_left,
                 "latest_weight_g": latest_weight_g,
                 "rec_status": rec["status"],
@@ -909,21 +846,20 @@ def upsert_pricing_rules():
 @login_required
 def seed_demo():
     get_or_create_default_store()
-    _ensure_partner_stores()
 
     db = get_mongo_db()
     seeded_count = 0
-    for idx, row in enumerate(db.stores.find().sort("_id", 1)):
+    for row in db.stores.find().sort("_id", 1):
         sid = row["_id"]
         if _store_has_items(sid):
             continue
-        _seed_store_catalog(sid, idx)
-        seeded_count += 1
+        if _seed_store_catalog(sid, 0):
+            seeded_count += 1
 
     store_id = session.get("store_id") or get_or_create_default_store()
     if seeded_count:
         flash(
-            f"Seeded demo SKUs and batches for {seeded_count} store(s). Use the store menu to switch locations.",
+            f"Seeded minimal demo SKUs and batches for {seeded_count} empty store(s).",
             "success",
         )
     else:

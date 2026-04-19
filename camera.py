@@ -12,41 +12,15 @@ import requests
 import torch
 from dotenv import load_dotenv
 from PIL import Image
-from transformers import pipeline
 from torchvision import models, transforms
 
-from ripeness import classify_ripeness
+from ripeness_keywords import infer_ripeness_score
 
 load_dotenv()
 
 RECEIVE_DATA_URL = "https://whack-wlr9.onrender.com/receive-data"
 
-# COCO class names (lowercase) that we treat as grocery / supermarket items for DETR.
-GROCERY_COCO_LABELS: frozenset[str] = frozenset({
-    "banana",
-    "apple",
-    "orange",
-    "broccoli",
-    "carrot",
-    "sandwich",
-    "hot dog",
-    "pizza",
-    "donut",
-    "cake",
-    "bottle",
-    "wine glass",
-    "cup",
-    "bowl",
-    "fork",
-    "knife",
-    "spoon",
-})
-
 # ── Model setup (loaded once at startup) ────────────────────────────────────
-
-# Object detection (DETR)
-print("Loading object detection model (DETR)...")
-detector = pipeline("object-detection", model="facebook/detr-resnet-50")
 
 # Image classification (ResNet-50 via torchvision)
 print("Loading classification model (ResNet-50)...")
@@ -100,21 +74,6 @@ def frame_to_pil(frame: Any) -> Image.Image:
 
 # ── Analysis functions ───────────────────────────────────────────────────────
 
-def detect_objects(image: Image.Image) -> list[dict]:
-    """Detect objects and their bounding boxes using DETR."""
-    return detector(image)
-
-
-def best_grocery_detection(objects: list[dict]) -> dict | None:
-    """Highest-confidence detection whose label is a grocery-related COCO class."""
-    grocery_hits = [
-        o for o in objects if str(o.get("label", "")).lower() in GROCERY_COCO_LABELS
-    ]
-    if not grocery_hits:
-        return None
-    return max(grocery_hits, key=lambda o: float(o.get("score", 0.0)))
-
-
 def classify_image(image: Image.Image, top_k: int = 5) -> list[tuple[str, float]]:
     """Return the top-k ImageNet class predictions using ResNet-50."""
     tensor = resnet_transform(image).unsqueeze(0)
@@ -130,10 +89,9 @@ def classify_image(image: Image.Image, top_k: int = 5) -> list[tuple[str, float]
 
 def infer_product_name(
     caption: str,
-    objects: list[dict],
     top_classes: list[tuple[str, float]],
 ) -> str:
-    """Infer a likely grocery product name from caption + detected objects + classifier labels."""
+    """Infer a likely grocery product name from classifier-derived text + ImageNet labels."""
     caption_lower = caption.lower()
     grocery_items = [
         "banana",
@@ -152,11 +110,6 @@ def infer_product_name(
         "broccoli",
         "carrot",
     ]
-
-    primary = best_grocery_detection(objects)
-    if primary is not None:
-        raw_label = str(primary["label"]).strip()
-        return raw_label.title() if raw_label else "Unknown product"
 
     for item in grocery_items:
         if item in caption_lower:
@@ -232,7 +185,6 @@ def extract_product_code(raw_text: str) -> str | None:
 def format_analysis_report(
     caption:      str,
     ripeness:     int,
-    objects:      list[dict],
     top_classes:  list[tuple[str, float]],
     raw_text:     str,
     product_code: str | None,
@@ -243,9 +195,9 @@ def format_analysis_report(
     lines.append("=" * 60)
     lines.append("           OBJECT + TEXT ANALYSIS REPORT")
     lines.append("=" * 60)
-    lines.append("  Single capture: vision models + Tesseract OCR on the same frame")
+    lines.append("  Single capture: ResNet-50 classification + Tesseract OCR on the same frame")
 
-    lines.append("\n[1] SCENE DESCRIPTION (BLIP captioning)")
+    lines.append("\n[1] CLASSIFIER TEXT (ResNet labels, used for name + ripeness hints)")
     lines.append("-" * 40)
     lines.append(f"  {caption}")
 
@@ -258,29 +210,9 @@ def format_analysis_report(
     lines.append("-" * 40)
     lines.append(f"  {ripeness} / 5")
 
-    lines.append("\n[4] DETECTED OBJECTS (DETR)")
+    lines.append("\n[4] OBJECT DETECTION")
     lines.append("-" * 40)
-    primary = best_grocery_detection(objects)
-    if primary is not None:
-        pct = round(float(primary["score"]) * 100, 1)
-        lines.append(
-            f"  ★ Grocery pick (highest confidence): {primary['label']}  ({pct:.1f}%)"
-        )
-    elif objects:
-        lines.append("  (No detections matched the grocery whitelist — see list below.)")
-    if objects:
-        seen: dict[str, float] = {}
-        for obj in objects:
-            label = obj["label"]
-            score = round(obj["score"] * 100, 1)
-            if label not in seen or score > seen[label]:
-                seen[label] = score
-        primary_label = primary["label"] if primary is not None else None
-        for label, score in sorted(seen.items(), key=lambda x: -x[1]):
-            tag = "★ " if primary_label is not None and label == primary_label else "  "
-            lines.append(f"  {tag}{label:<26} confidence: {score:.1f}%")
-    else:
-        lines.append("  No objects detected.")
+    lines.append("  (Not used — pipeline is one frame through ResNet + Tesseract only.)")
 
     lines.append("\n[5] EXTRACTED TEXT (Tesseract OCR)")
     lines.append("-" * 40)
@@ -305,25 +237,24 @@ def main() -> None:
 
     print("\nRunning analysis — please wait...\n")
 
-    # One call handles captioning + ripeness scoring, and returns both
-    # so we can still use the caption for product-name inference.
-    ripeness_score, caption = classify_ripeness(image)
+    # Same PIL image: ImageNet classification (ResNet) + OCR (Tesseract).
+    top_classes = classify_image(image, top_k=5)
+    raw_text = extract_text(image)
 
-    objects      = detect_objects(image)
-    top_classes  = classify_image(image, top_k=5)
-    raw_text     = extract_text(image)
+    caption = ", ".join(label for label, _ in top_classes)
+    ripeness_score = infer_ripeness_score(caption)
     product_code = extract_product_code(raw_text)
 
-    product_name = infer_product_name(caption, objects, top_classes)
+    product_name = infer_product_name(caption, top_classes)
 
     report = format_analysis_report(
-        caption, ripeness_score, objects, top_classes, raw_text, product_code
+        caption, ripeness_score, top_classes, raw_text, product_code
     )
     print(report)
 
     print(f"{product_name}, {ripeness_score}, {product_code or 'UNKNOWN'}")
 
-    # POST JSON (flag must be first key for /receive-data HTML response on server)
+    # POST JSON (flag must be first key). flag=1 → HTML confirmation + server log.
     body = {"flag": 1, "product_code": product_code, "ripeness_score": ripeness_score}
     try:
         response = requests.post(RECEIVE_DATA_URL, json=body, timeout=30)
