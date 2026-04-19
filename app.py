@@ -262,9 +262,12 @@ def receive_data():
         return render_template("receive_data_display.html", payload=data)
 
     if first_key == "flag" and first_val == 0:
-        # Only the first flag=0 after a flag=1 is logged (one merged row). Orphan flag=0 posts are ignored.
+        # (1) Merged camera (flag=1 pending) + this telemetry row.
+        # (2) Or telemetry-only: include ``lot_code`` / ``product_code`` matching a Mongo lot (ESP32 shelf).
         merged_ok = False
         lot_status: Optional[str] = None
+        batch: Optional[dict] = None
+        db = None
         try:
             db = get_mongo_db()
             pend = db["ingest_pending"].find_one({"_id": INGEST_PENDING_DOC_ID})
@@ -289,15 +292,55 @@ def receive_data():
                 _trim_logs_collection(coll)
                 db["ingest_pending"].delete_one({"_id": INGEST_PENDING_DOC_ID})
                 merged_ok = True
+            else:
+                telem_only = merge_camera_and_telemetry_to_batch({}, dict(data))
+                key_only = _normalize_lot_label(
+                    str(telem_only.get("lot_id") or telem_only.get("product_code") or "")
+                )
+                if key_only:
+                    batch, lot_status = apply_batch_merge_to_lot(db, telem_only)
+                    coll = db["logs"]
+                    coll.insert_one(
+                        {
+                            "ts": now_ts(),
+                            "payload": {"batch": sanitize_batch_for_log(batch)},
+                            "lot_update": lot_status,
+                        }
+                    )
+                    _trim_logs_collection(coll)
+                    merged_ok = True
         except Exception:
             pass
-        if merged_ok:
-            return jsonify(
-                status="success",
-                message="Logged batch and updated lot if matched.",
-                lot_update=lot_status,
-            ), 200
-        return jsonify(status="success", message="No pending camera capture; telemetry not logged."), 200
+
+        resp: dict = {
+            "status": "success",
+            "message": (
+                "Logged batch and updated lot if matched."
+                if merged_ok
+                else "No pending camera capture; telemetry not logged. Add lot_code to JSON to update a lot without camera."
+            ),
+            "lot_update": lot_status,
+        }
+        try:
+            if (
+                merged_ok
+                and db is not None
+                and batch
+                and lot_status == "lot_updated"
+            ):
+                lk = _normalize_lot_label(batch.get("lot_id") or batch.get("product_code") or "")
+                if lk:
+                    lot_disp = _find_lot_by_batch_key(db, lk)
+                    if lot_disp is not None:
+                        fi_disp = db.food_items.find_one({"_id": lot_disp["food_item_id"]})
+                        if fi_disp:
+                            lcd = _esp32_banana_lcd_payload(db, lot_disp, fi_disp)
+                            if lcd:
+                                resp.update(lcd)
+        except Exception:
+            pass
+
+        return jsonify(resp), 200
 
     # Legacy: pinger-style payloads (weight + message)
     if 'weight' in data and 'message' in data:
@@ -714,6 +757,91 @@ def _pricing_anchor_from_food_item(fi: dict) -> Optional[float]:
         x = float(p)
         return x if x > 0 else None
     except (TypeError, ValueError):
+        return None
+
+
+def _lcd16(text: str) -> str:
+    """Single-line LCD1602: max 16 characters."""
+    t = (text or "").replace("\n", " ").strip()
+    return t[:16] if len(t) > 16 else t
+
+
+def _esp32_banana_lcd_payload(db, lot: dict, fi: dict) -> Optional[dict]:
+    """JSON fields for ESP32 firmware: ``display_line_1``, ``display_line_2``, ``shelf_price``, etc."""
+    if not _food_item_is_banana(fi):
+        return None
+    now = datetime.datetime.now()
+    try:
+        pr_rule = db.pricing_rules.find_one({"food_item_id": fi["_id"]})
+        min_price = float(pr_rule["min_price"]) if pr_rule and pr_rule.get("min_price") is not None else None
+        max_price = float(pr_rule["max_price"]) if pr_rule and pr_rule.get("max_price") is not None else None
+
+        sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", -1)])
+        latest_weight_g = lot.get("weight_grams")
+        if latest_weight_g is None and sr:
+            latest_weight_g = sr.get("weight_g")
+        if lot.get("last_camera_weight_g") is not None:
+            try:
+                latest_weight_g = float(lot["last_camera_weight_g"])
+            except (TypeError, ValueError):
+                pass
+        temp_c = lot.get("temperature_c")
+        humidity_rh = lot.get("humidity_pct")
+        if sr:
+            if temp_c is None:
+                temp_c = sr.get("temp_c")
+            if humidity_rh is None:
+                humidity_rh = sr.get("humidity_rh")
+
+        recv_raw = lot.get("received_at")
+        if isinstance(recv_raw, datetime.datetime):
+            recv_dt = recv_raw
+        else:
+            recv_dt = parse_storage_datetime(recv_raw) or now
+        if recv_dt.tzinfo is not None:
+            recv_dt = recv_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+
+        first_sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", 1)])
+        if first_sr and first_sr.get("weight_g") is not None:
+            iw = float(first_sr["weight_g"])
+        else:
+            iw = float(lot.get("weight_grams") or latest_weight_g or 1.0)
+        cw = float(latest_weight_g or iw or 1.0)
+        tc0 = float(temp_c if temp_c is not None else 22.0)
+        hp0 = float(humidity_rh if humidity_rh is not None else 60.0)
+        cw, tc0, hp0 = _banana_live_phys_for_pricing(lot, cw, temp_c, humidity_rh)
+
+        rip_use = _ripeness_for_pricing_lot(lot)
+        pr_res = price_for_mongo_lot(
+            received_at=recv_dt,
+            now=now_naive,
+            initial_weight_g=max(iw, 1.0),
+            current_weight_g=max(cw, 1.0),
+            temperature_c=tc0,
+            humidity_pct=hp0,
+            ripeness=rip_use,
+            last_shown_price=None,
+            anchor_price=_pricing_anchor_from_food_item(fi),
+        )
+        recommended_price = float(pr_res.final_price)
+        if min_price is not None and recommended_price < min_price:
+            recommended_price = float(min_price)
+        if max_price is not None and recommended_price > max_price:
+            recommended_price = float(max_price)
+
+        fresh = float(pr_res.freshness_score)
+        rip_lbl = rip_use if rip_use is not None else "-"
+        line1 = _lcd16(f"${recommended_price:.2f}  F:{fresh:.0f}")
+        line2 = _lcd16(f"R:{rip_lbl} T:{tc0:.0f}C H:{hp0:.0f}%")
+        return {
+            "display_line_1": line1,
+            "display_line_2": line2,
+            "shelf_price": round(recommended_price, 2),
+            "freshness_score": round(fresh, 1),
+            "ripeness": rip_use,
+        }
+    except Exception:
         return None
 
 
