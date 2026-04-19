@@ -1,4 +1,4 @@
-# whack
+# INSTRUCTIONS
 
 DPG Alignment Statement
 Track 2 — GW Global Food Institute | Problem Statement 2: The Corner Store of the Future
