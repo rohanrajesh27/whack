@@ -280,7 +280,7 @@ def format_analysis_report(
     lines.append("=" * 60)
     lines.append("           OBJECT + TEXT ANALYSIS REPORT")
     lines.append("=" * 60)
-    lines.append("  Frame 1: object recognition, Frame 2: text extraction")
+    lines.append("  Single capture: vision models + Tesseract OCR on the same frame")
 
     # ── Caption ──────────────────────────────────────────────────
     lines.append("\n[1] SCENE DESCRIPTION (BLIP captioning)")
@@ -342,18 +342,16 @@ def format_analysis_report(
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    first_frame = capture_frame("First capture: object recognition")
-    second_frame = capture_frame("Second capture: text extraction")
+    frame = capture_frame("Capture: product + label in one shot (SPACE)")
 
-    first_image = frame_to_pil(first_frame)
-    second_image = frame_to_pil(second_frame)
+    image = frame_to_pil(frame)
 
     print("\nRunning analysis — please wait...\n")
 
-    caption      = generate_caption(first_image)
-    objects      = detect_objects(first_image)
-    top_classes  = classify_image(first_image, top_k=5)
-    raw_text     = extract_text(second_image)
+    caption      = generate_caption(image)
+    objects      = detect_objects(image)
+    top_classes  = classify_image(image, top_k=5)
+    raw_text     = extract_text(image)
     product_code = extract_product_code(raw_text)
 
     product_name = infer_product_name(caption, objects, top_classes)
