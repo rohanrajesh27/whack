@@ -38,7 +38,7 @@ A shelf-edge freshness sensor and pricing display, purpose-built for the corner 
 **How it works (draft workflow)**
 
 1. **Item registration.** Owner scans or taps to register a delivery lot (e.g., "banana lot, delivered Monday"). Lowest-friction option is a QR scan from the DCCK delivery sheet or a manual button press.
-2. **Continuous sensing.** ESP32 reads load cell (weight trend), CCS811 (VOC/ethylene proxy for ripening), and DHT11 (temperature, humidity). Data is timestamped via Wi-Fi/NTP.
+2. **Continuous sensing.** ESP32 reads load cell (weight trend), Explore CCS811 (VOC/ethylene proxy for ripening), and DHT11 (temperature, humidity). Data is timestamped via Wi-Fi/NTP.
 3. **Freshness score.** A weighted, rules-based score from 0 to 100 blends weight loss rate, VOC trend, and cumulative temperature/humidity exposure.
 4. **Dynamic price.** Score maps to a price curve with a ceiling (never above the DCCK-aligned benchmark) and a floor (respects SNAP Match economics).
 5. **Shelf display.** LCD1602 shows today's price. LEDs give an at-a-glance status (green/yellow/amber/red).
