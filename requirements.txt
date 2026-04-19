@@ -8,3 +8,4 @@ pytesseract>=0.3.10
 torch>=2.2.0
 torchvision>=0.17.0
 transformers>=4.40.0
+pytesseract==0.3.13

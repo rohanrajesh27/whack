@@ -21,7 +21,7 @@ from typing import Optional
 
 # --- FAO anchor (the one thing we DON'T change without a new monthly figure)
 FAO_BANANA_PRICE_USD_PER_KG = 0.90   # recent FAO wholesale banana price
-AVG_BANANA_WEIGHT_KG = 0.120         # USDA average, ~120g per medium banana
+AVG_BANANA_WEIGHT_KG = 0.184         # USDA average, ~120g per medium banana
 
 # --- Markup tier (pick one: 2.5, 3.0, or 3.5)
 MARKUP_MULTIPLIER = 3.0              # 2.5 conservative / 3.0 DCCK / 3.5 big-box
