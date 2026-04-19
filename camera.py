@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from typing import Any
+import numpy as np
 
 import cv2
 import pytesseract
@@ -183,6 +184,37 @@ def infer_product_name(
 
     return "Unknown product"
 
+def preprocess_for_ocr(image: Image.Image) -> Image.Image:
+    """Clean up a phone photo before sending it to Tesseract."""
+    # PIL -> OpenCV array
+    img = np.array(image)
+    if img.ndim == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+    # 1. Grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # 2. Upscale — Tesseract likes text at least 30px tall
+    gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+
+    # 3. Denoise (removes camera grain without softening edges too much)
+    gray = cv2.fastNlMeansDenoising(gray, h=10)
+
+    # 4. Adaptive threshold — handles uneven lighting way better than a fixed threshold
+    binary = cv2.adaptiveThreshold(
+        gray, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,   # block size — try 21, 31, 41
+        10,   # constant subtracted from the mean
+    )
+
+    # 5. Small morphological open to kill speckle
+    kernel = np.ones((2, 2), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+
+    return Image.fromarray(binary)
+
 
 def infer_ripeness_score(caption: str) -> int:
     """Map a grocery caption to a ripeness score from 1 (unripe) to 5 (overripe)."""
@@ -202,8 +234,9 @@ def infer_ripeness_score(caption: str) -> int:
 
 def extract_text(image: Image.Image) -> str:
     """Run Tesseract OCR with optimised config for product labels."""
-    custom_config = r"--oem 3 --psm 11"   # sparse text mode — good for labels
-    return pytesseract.image_to_string(image, config=custom_config)
+    prepped = preprocess_for_ocr(image)
+    custom_config = r"--oem 3 --psm 11"
+    return pytesseract.image_to_string(prepped, config=custom_config)
 
 
 # Product code: ***-*#-*#-###  (* = alphanumeric, # = digit) after upper-casing OCR text.
@@ -215,14 +248,7 @@ PRODUCT_CODE_COMPACT = re.compile(r"([A-Z0-9]{3})([A-Z0-9]\d)([A-Z0-9]\d)(\d{3})
 
 
 def extract_product_code(raw_text: str) -> str | None:
-    """
-    Search OCR output for a code matching ***-*#-*#-###.
-
-    *  = any letter or digit (A–Z / 0–9)
-    #  = digit only
-    Example: ABC-1D-2E-345, X7Z-A9-B0-123
-    """
-    normalised = raw_text.upper()
+    normalised = raw_text.upper().replace("I", "1")
 
     m = PRODUCT_CODE_STRICT.search(normalised)
     if m:
