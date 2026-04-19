@@ -1380,30 +1380,23 @@ main.container.stack {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Inventory: product, dept, batch kind, lot, qty, received, expires, days, ripen, temp, RH, weight, base, disc, guardrails, notes, pricing */
+/* Inventory: batch kind, qty, disc %, pricing, expires, days, ripeness, °C, humidity, wt g */
 .table.table--inventory {
-  min-width: 2100px;
+  min-width: 1040px;
 }
 
 .table--inventory .table__row {
   grid-template-columns:
     minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 0.55fr)
+    minmax(0, 1.25fr)
     minmax(0, 0.75fr)
-    minmax(0, 0.65fr)
-    minmax(0, 1.05fr)
-    minmax(0, 0.85fr)
-    minmax(0, 0.95fr)
-    minmax(0, 0.7fr)
     minmax(0, 0.45fr)
-    minmax(0, 0.45fr)
-    minmax(0, 0.45fr)
-    minmax(0, 0.45fr)
-    minmax(0, 0.5fr)
     minmax(0, 0.55fr)
     minmax(0, 0.5fr)
-    minmax(0, 0.85fr)
-    minmax(0, 0.95fr)
-    minmax(0, 1.1fr);
+    minmax(0, 0.55fr)
+    minmax(0, 0.55fr);
 }
 
 .table--inventory .table__row > * {
@@ -1416,15 +1409,6 @@ main.container.stack {
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
-}
-
-.inv-notes {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 .table__row > * {
