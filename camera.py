@@ -1,14 +1,3 @@
-"""
-Capture a photo from the default camera and extract visible text using Google Gemini.
-
-Setup:
-  pip install -r requirements.txt
-  Add to .env: GEMINI_API_KEY=your_key
-
-Run:
-  python camera.py
-"""
-
 from __future__ import annotations
 
 import os
@@ -16,22 +5,11 @@ import sys
 from typing import Any
 
 import cv2
-import google.generativeai as genai
+import pytesseract  # Install using pip
 from dotenv import load_dotenv
 from PIL import Image
 
 load_dotenv()
-
-
-def configure_gemini() -> genai.GenerativeModel:
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        print("Missing GEMINI_API_KEY in environment or .env file.", file=sys.stderr)
-        sys.exit(1)
-    genai.configure(api_key=api_key)
-    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    return genai.GenerativeModel(model_name)
-
 
 def capture_frame() -> Any:
     cap = cv2.VideoCapture(0)
@@ -68,29 +46,15 @@ def frame_to_pil(frame: Any) -> Image.Image:
     return Image.fromarray(rgb)
 
 
-def extract_text(model: genai.GenerativeModel, image: Image.Image) -> str:
-    prompt = (
-        "Extract all readable text from this image. "
-        "Preserve line breaks where they matter for readability. "
-        "If there is no text, say so briefly."
-    )
-    response = model.generate_content([prompt, image])
-    if not response.text:
-        if getattr(response, "prompt_feedback", None):
-            print(response.prompt_feedback, file=sys.stderr)
-        print(
-            "Gemini returned no text (check API key, model name, or safety filters).",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return response.text.strip()
+def extract_text_from_image(image: Image.Image) -> str:
+    # Use pytesseract to extract text from image
+    return pytesseract.image_to_string(image)
 
 
 def main() -> None:
-    model = configure_gemini()
     frame = capture_frame()
     pil_image = frame_to_pil(frame)
-    text = extract_text(model, pil_image)
+    text = extract_text_from_image(pil_image)
     print("\n--- Extracted text ---\n")
     print(text)
 
