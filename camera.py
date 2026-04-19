@@ -8,6 +8,7 @@ import numpy as np
 
 import cv2
 import pytesseract
+import requests
 import torch
 from dotenv import load_dotenv
 from PIL import Image
@@ -19,6 +20,8 @@ from transformers import (
 from torchvision import models, transforms
 
 load_dotenv()
+
+RECEIVE_DATA_URL = "https://whack-wlr9.onrender.com/receive-data"
 
 # COCO class names (lowercase) that we treat as grocery / supermarket items for DETR.
 GROCERY_COCO_LABELS: frozenset[str] = frozenset({
@@ -365,6 +368,23 @@ def main() -> None:
     print(report)
 
     print(f"{product_name}, {ripeness_score}, {product_code or 'UNKNOWN'}")
+
+    # POST JSON (flag must be first key for /receive-data HTML response on server)
+    body = {"flag": 1, "product_code": product_code, "ripeness_score": ripeness_score}
+    try:
+        response = requests.post(RECEIVE_DATA_URL, json=body, timeout=30)
+        if response.status_code == 200:
+            print("Server acknowledged (200).")
+            ct = (response.headers.get("Content-Type") or "").lower()
+            if "application/json" in ct:
+                print("Server Response:", response.json())
+            else:
+                print("Server returned HTML page (length %s bytes)." % len(response.text))
+        else:
+            print(f"Failed to send data. Status code: {response.status_code}")
+            print("Response:", response.text[:2000])
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
 
 
 if __name__ == "__main__":
