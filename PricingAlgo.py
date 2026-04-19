@@ -1,5 +1,5 @@
 """
-Corner Store of the Future - Dynamic Pricing (single-file version)
+Corner Store of the Future - Dynamic Pricing
 Track 2: GW Global Food Institute | Problem Statement 2
 
 Edit the INPUTS section at the top of the file, then run:
@@ -21,7 +21,7 @@ from typing import Optional
 
 # --- FAO anchor (the one thing we DON'T change without a new monthly figure)
 FAO_BANANA_PRICE_USD_PER_KG = 0.90   # recent FAO wholesale banana price
-AVG_BANANA_WEIGHT_KG = 0.184         # USDA average, ~120g per medium banana
+AVG_BANANA_WEIGHT_KG = 0.120         # USDA average, ~120g per medium banana
 
 # --- Markup tier (pick one: 2.5, 3.0, or 3.5)
 MARKUP_MULTIPLIER = 3.0              # 2.5 conservative / 3.0 DCCK / 3.5 big-box
@@ -37,9 +37,7 @@ HUMIDITY_PCT = 60.0                  # current relative humidity
 # Multiplies the effective age before it goes into the freshness curve.
 # 1.0  = looks exactly as expected for its age (no override)
 # <1.0 = LOOKS FRESHER than its age suggests (treat as younger banana)
-#        e.g. 0.7 means a 4-day-old banana is scored like a 2.8-day-old one
 # >1.0 = LOOKS WORSE than its age suggests (treat as older banana)
-#        e.g. 1.3 means a 4-day-old banana is scored like a 5.2-day-old one
 VISUAL_AGE_MULTIPLIER = 1.0
 
 # --- Per-store calibration (change once per store, then leave alone)
@@ -50,7 +48,7 @@ MIN_DISPLAY_CHANGE = 0.05            # LCD doesn't refresh for smaller changes
 
 
 # ===========================================================================
-# FRESHNESS MODEL TUNABLES - change if you want different curve behavior
+# FRESHNESS MODEL TUNABLES
 # ===========================================================================
 
 # Weights for the freshness score components (must sum to 1.0)
@@ -63,16 +61,16 @@ W_HUMIDITY = 0.10
 TIME_DECAY_MIDPOINT_DAYS = 4.0
 TIME_DECAY_STEEPNESS = 1.3
 
-# Optimal storage conditions for bananas (used for penalty calcs)
+# Optimal storage conditions for bananas
 OPTIMAL_TEMP_C = 15.0
 OPTIMAL_HUMIDITY_PCT = 90.0
 
-# End-of-life multiplier floor - even overripe produce stays at 40% of anchor
+# End-of-life multiplier floor
 FRESHNESS_FLOOR_MULTIPLIER = 0.40
 
 
 # ===========================================================================
-# PRICING LOGIC - you shouldn't need to touch anything below this line
+# PRICING LOGIC
 # ===========================================================================
 
 @dataclass
@@ -117,12 +115,7 @@ def compute_anchor_price() -> float:
 
 
 def _time_score(lot: LotState, now: float) -> float:
-    """Logistic time decay: slow at first, steep drop around midpoint, long tail.
-
-    The raw age (in days) is multiplied by VISUAL_AGE_MULTIPLIER before the
-    curve is evaluated. A value of 0.7 makes the banana look 30% younger to
-    the curve; 1.3 makes it look 30% older.
-    """
+    """Logistic time decay, modulated by VISUAL_AGE_MULTIPLIER."""
     raw_age_days = (now - lot.registered_at) / 86400.0
     effective_age_days = raw_age_days * VISUAL_AGE_MULTIPLIER
     exponent = TIME_DECAY_STEEPNESS * (effective_age_days - TIME_DECAY_MIDPOINT_DAYS)
@@ -132,7 +125,7 @@ def _time_score(lot: LotState, now: float) -> float:
 
 
 def _temp_score(lot: LotState) -> float:
-    """Cumulative degree-hours above optimal - every hour hot costs points."""
+    """Cumulative degree-hours above optimal."""
     if len(lot.readings) < 2:
         return 100.0
     penalty = 0.0
@@ -145,7 +138,7 @@ def _temp_score(lot: LotState) -> float:
 
 
 def _weight_score(lot: LotState) -> float:
-    """Weight loss is a direct ripeness signal. ~15% loss = end of life."""
+    """Weight loss signal. ~15% loss = end of life."""
     latest = lot.latest()
     if latest is None or lot.initial_weight_g <= 0:
         return 100.0
@@ -154,7 +147,7 @@ def _weight_score(lot: LotState) -> float:
 
 
 def _humidity_score(lot: LotState) -> float:
-    """Deviation from optimal humidity, averaged across readings."""
+    """Deviation from optimal humidity."""
     if not lot.readings:
         return 100.0
     deviations = [abs(r.humidity_pct - OPTIMAL_HUMIDITY_PCT) for r in lot.readings]
@@ -226,19 +219,18 @@ def compute_shelf_price(lot: LotState, now: float) -> PricingResult:
 
 
 # ===========================================================================
-# RUN - builds a lot from the INPUTS at the top and prints the price
+# Helper for other modules (restock) to get the current price without
+# running main() and printing everything.
 # ===========================================================================
 
-def main() -> None:
+def price_from_inputs() -> PricingResult:
+    """Build a LotState from the module-level INPUTS and return the price."""
     now = AGE_DAYS * 86400.0
     lot = LotState(
         lot_id="banana",
         registered_at=0.0,
         initial_weight_g=INITIAL_WEIGHT_G,
     )
-
-    # If the banana has some age on it, seed a day-zero reading so the
-    # temperature integral has two points to work with.
     if AGE_DAYS > 0:
         lot.add_reading(SensorReading(
             timestamp=0.0,
@@ -246,15 +238,21 @@ def main() -> None:
             temperature_c=TEMPERATURE_C,
             humidity_pct=HUMIDITY_PCT,
         ))
-
     lot.add_reading(SensorReading(
         timestamp=now,
         weight_g=CURRENT_WEIGHT_G,
         temperature_c=TEMPERATURE_C,
         humidity_pct=HUMIDITY_PCT,
     ))
+    return compute_shelf_price(lot, now=now)
 
-    result = compute_shelf_price(lot, now=now)
+
+# ===========================================================================
+# RUN
+# ===========================================================================
+
+def main() -> None:
+    result = price_from_inputs()
 
     print("=" * 60)
     print("  Corner Store Pricing - Banana")
