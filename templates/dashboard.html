@@ -141,7 +141,8 @@
           <div class="panel__header">
             <h2>Inventory + markdown recommendations</h2>
             <p class="muted">
-              This mirrors the brainstorm workflow: track lots + sensor signals, then recommend markdowns with guardrails.
+              Banana batches use <strong>PricingAlgo</strong> (age, weight, temp, humidity, ripeness), then your min/max guardrails.
+              The banana restock strip uses <strong>RestockAlgo</strong> with one synthetic daily-sales sample per banana lot on screen.
             </p>
           </div>
 
@@ -169,7 +170,8 @@
               <div class="table table--inventory">
             <div class="table__row table__row--head">
               <div>Batch kind</div>
-              <div>Qty label</div>
+              <div title="Lot code / batch ID you assign (e.g. ST1-I1-B1-334)">Lot code</div>
+              <div title="Optional short label (case count, delivery nickname, …)">Qty label</div>
               <div>Disc %</div>
               <div>Pricing</div>
               <div>Expires</div>
@@ -190,6 +192,7 @@
             {% for r in inventory_rows %}
               <div class="table__row">
                 <div class="mono" title="{{ r.batch_type }}">{{ r.batch_type }}</div>
+                <div class="mono" title="{{ r.lot_code }}">{{ r.lot_code }}</div>
                 <div class="mono" title="{{ r.quantity_label }}">{{ r.quantity_label }}</div>
 
                 <div class="mono">
@@ -200,7 +203,7 @@
                   {% endif %}
                 </div>
 
-                <div class="rec">
+                <div class="rec"{% if r.pricing_freshness is not none %} title="PricingAlgo freshness {{ (r.pricing_freshness)|round|int }}/100 · anchor ${{ '%.2f'|format(r.pricing_anchor) }}"{% endif %}>
                   <span class="badge badge--{{ r.rec_status }}">{{ r.rec_label }}</span>
                   <div class="rec__price">
                     {% if r.recommended_price is none %}
@@ -262,6 +265,24 @@
             {% endfor %}
             </div>
           </div>
+          {% if banana_restock %}
+            <div class="banana-restock" role="region" aria-label="Banana restock (RestockAlgo)">
+              <div class="banana-restock__title">Banana restock ({{ banana_restock.lots }} lot{% if banana_restock.lots != 1 %}s{% endif %})</div>
+              <div class="banana-restock__grid">
+                <div><span class="muted">Model avg price</span><br /><span class="mono">${{ "%.2f"|format(banana_restock.model_avg_price) }}</span></div>
+                <div><span class="muted">Est. units on hand</span><br /><span class="mono">{{ banana_restock.stock_units }}</span></div>
+                <div><span class="muted">Sales sample / lot·day</span><br /><span class="mono">{{ banana_restock.daily_sales_per_lot|join(', ') }}</span></div>
+                <div><span class="muted">Velocity (base → adj.)</span><br /><span class="mono">{{ banana_restock.velocity_avg }} → {{ banana_restock.velocity_adj }}</span></div>
+                <div><span class="muted">Days of supply</span><br /><span class="mono">{{ banana_restock.days_supply }}</span></div>
+                <div><span class="muted">Reorder point</span><br /><span class="mono">{{ banana_restock.reorder_point }}</span></div>
+                <div><span class="muted">Stockout risk</span><br /><span class="mono">{{ banana_restock.stockout_risk_pct }}%</span></div>
+                <div><span class="muted">Suggested order</span><br /><span class="mono">{% if banana_restock.should_reorder %}{{ banana_restock.suggested_qty }} units{% else %}—{% endif %}</span></div>
+              </div>
+              <div class="banana-restock__alert banana-restock__alert--{{ banana_restock.alert_level }}">
+                {{ banana_restock.alert_message }}
+              </div>
+            </div>
+          {% endif %}
           </div>
         </div>
 

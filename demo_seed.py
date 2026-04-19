@@ -155,13 +155,14 @@ def _insert_three_banana_lots(db, *, store_id: int, food_item_id: int, price: fl
 
 
 def _ensure_pricing_rule(db, food_item_id: int, price: float) -> None:
+    """Wide enough band that per-banana ``PricingAlgo`` outputs are not all squashed to one guardrail."""
     db.pricing_rules.delete_many({"food_item_id": food_item_id})
     db.pricing_rules.insert_one(
         {
             "_id": alloc_id("pricing_rules"),
             "food_item_id": food_item_id,
-            "min_price": round(float(price) * 0.35, 2),
-            "max_price": round(float(price) * 1.15, 2),
+            "min_price": max(0.08, round(float(price) * 0.10, 2)),
+            "max_price": round(float(price) * 1.6, 2),
             "margin_floor_pct": 12.0,
             "created_at": now_ts(),
         }
@@ -219,6 +220,7 @@ def reseed_banana_lots_for_store(db=None, store_id: int = STORE_PILOT_ID) -> boo
     db.lots.delete_many(lot_q)
     price = float(fi.get("price") or 0.79)
     _insert_three_banana_lots(db, store_id=lot_store, food_item_id=fid, price=price)
+    _ensure_pricing_rule(db, fid, price)
     _sync_counters_from_collections(db)
     return True
 

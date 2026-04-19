@@ -1380,15 +1380,16 @@ main.container.stack {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Inventory: batch kind, qty, disc %, pricing, expires, days, ripeness, °C, humidity, wt g */
+/* Inventory: batch kind, lot code, qty label, disc %, pricing, expires, days, ripeness, °C, humidity, wt g */
 .table.table--inventory {
-  min-width: 1040px;
+  min-width: 1180px;
 }
 
 .table--inventory .table__row {
   grid-template-columns:
-    minmax(0, 1fr)
-    minmax(0, 1fr)
+    minmax(0, 0.85fr)
+    minmax(0, 1.15fr)
+    minmax(0, 0.95fr)
     minmax(0, 0.55fr)
     minmax(0, 1.25fr)
     minmax(0, 0.75fr)
@@ -1409,6 +1410,51 @@ main.container.stack {
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
+}
+
+.banana-restock {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 200, 120, 0.06);
+}
+
+.banana-restock__title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.banana-restock__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px 16px;
+  font-size: 13px;
+}
+
+.banana-restock__alert {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.banana-restock__alert--green {
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.25);
+}
+
+.banana-restock__alert--yellow {
+  background: rgba(241, 196, 15, 0.12);
+  border: 1px solid rgba(241, 196, 15, 0.28);
+}
+
+.banana-restock__alert--red {
+  background: rgba(231, 76, 60, 0.12);
+  border: 1px solid rgba(231, 76, 60, 0.28);
 }
 
 .table__row > * {

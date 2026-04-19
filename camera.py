@@ -254,7 +254,12 @@ def main() -> None:
 
     # POST JSON (flag must be first key). ``product_code`` must match a banana lot ``lot_code`` / ``lot_id``
     # (e.g. ST1-I1-B1-334; server also resolves ST1-11-B1-334 after OCR I→1) so telemetry merges into MongoDB.
-    body = {"flag": 1, "product_code": product_code, "ripeness_score": ripeness_score}
+    body = {
+        "flag": 1,
+        "product_code": product_code,
+        "ripeness_score": ripeness_score,
+        "caption": (caption or "")[:400],
+    }
     try:
         response = requests.post(RECEIVE_DATA_URL, json=body, timeout=30)
         if response.status_code == 200:

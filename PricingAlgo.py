@@ -9,22 +9,35 @@ The script prints the anchor, freshness score, multiplier, and final
 shelf price, along with any guardrails that clamped the price.
 """
 
+import datetime as dt
 import math
+import os
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 # ===========================================================================
 # INPUTS - edit these when you have real data, then re-run the script
+# (Production: optional env overrides — PRICING_FAO_BANANA_USD_PER_KG,
+# PRICING_AVG_BANANA_WEIGHT_KG, PRICING_MARKUP_MULTIPLIER, etc.)
 # ===========================================================================
 
 # --- FAO anchor (the one thing we DON'T change without a new monthly figure)
-FAO_BANANA_PRICE_USD_PER_KG = 0.90   # recent FAO wholesale banana price
-AVG_BANANA_WEIGHT_KG = 0.120         # USDA average, ~120g per medium banana
+FAO_BANANA_PRICE_USD_PER_KG = _env_float("PRICING_FAO_BANANA_USD_PER_KG", 0.90)
+AVG_BANANA_WEIGHT_KG = _env_float("PRICING_AVG_BANANA_WEIGHT_KG", 0.120)
 
 # --- Markup tier (pick one: 2.5, 3.0, or 3.5)
-MARKUP_MULTIPLIER = 3.0              # 2.5 conservative / 3.0 DCCK / 3.5 big-box
+MARKUP_MULTIPLIER = _env_float("PRICING_MARKUP_MULTIPLIER", 3.0)
 
 # --- Sensor readings for the banana you're pricing right now
 CURRENT_WEIGHT_G = 120.0             # current weight from the load cell
@@ -41,10 +54,10 @@ HUMIDITY_PCT = 60.0                  # current relative humidity
 VISUAL_AGE_MULTIPLIER = 1.0
 
 # --- Per-store calibration (change once per store, then leave alone)
-DISTRIBUTOR_COST_PER_UNIT = 0.18     # what the store paid per banana
-SNAP_MATCH_FLOOR = 0.15              # price floor that preserves SNAP Match math
-AFFORDABILITY_CEILING = 0.60         # never price above this (mission cap)
-MIN_DISPLAY_CHANGE = 0.05            # LCD doesn't refresh for smaller changes
+DISTRIBUTOR_COST_PER_UNIT = _env_float("PRICING_DISTRIBUTOR_COST_PER_UNIT", 0.18)
+SNAP_MATCH_FLOOR = _env_float("PRICING_SNAP_MATCH_FLOOR", 0.15)
+AFFORDABILITY_CEILING = _env_float("PRICING_AFFORDABILITY_CEILING", 0.60)
+MIN_DISPLAY_CHANGE = _env_float("PRICING_MIN_DISPLAY_CHANGE", 0.05)
 
 
 # ===========================================================================
@@ -114,10 +127,11 @@ def compute_anchor_price() -> float:
     return max(DISTRIBUTOR_COST_PER_UNIT, min(raw, AFFORDABILITY_CEILING))
 
 
-def _time_score(lot: LotState, now: float) -> float:
-    """Logistic time decay, modulated by VISUAL_AGE_MULTIPLIER."""
+def _time_score(lot: LotState, now: float, visual_age_mult: Optional[float] = None) -> float:
+    """Logistic time decay, modulated by visual age multiplier (ripeness / camera)."""
     raw_age_days = (now - lot.registered_at) / 86400.0
-    effective_age_days = raw_age_days * VISUAL_AGE_MULTIPLIER
+    mult = VISUAL_AGE_MULTIPLIER if visual_age_mult is None else float(visual_age_mult)
+    effective_age_days = raw_age_days * mult
     exponent = TIME_DECAY_STEEPNESS * (effective_age_days - TIME_DECAY_MIDPOINT_DAYS)
     exponent = max(-50.0, min(50.0, exponent))
     score = 100.0 / (1.0 + math.exp(exponent))
@@ -155,10 +169,12 @@ def _humidity_score(lot: LotState) -> float:
     return max(0.0, 100.0 * (1.0 - avg_dev / 40.0))
 
 
-def compute_freshness_score(lot: LotState, now: float) -> float:
+def compute_freshness_score(
+    lot: LotState, now: float, visual_age_mult: Optional[float] = None
+) -> float:
     """Weighted blend of time, temperature, weight, and humidity."""
     score = (
-        W_TIME * _time_score(lot, now)
+        W_TIME * _time_score(lot, now, visual_age_mult)
         + W_TEMP * _temp_score(lot)
         + W_WEIGHT * _weight_score(lot)
         + W_HUMIDITY * _humidity_score(lot)
@@ -172,7 +188,9 @@ def freshness_to_multiplier(freshness: float) -> float:
     return FRESHNESS_FLOOR_MULTIPLIER + normalized * (1.0 - FRESHNESS_FLOOR_MULTIPLIER)
 
 
-def compute_shelf_price(lot: LotState, now: float) -> PricingResult:
+def compute_shelf_price(
+    lot: LotState, now: float, visual_age_mult: Optional[float] = None
+) -> PricingResult:
     """Full pipeline: anchor -> freshness -> multiplier -> guardrails -> display."""
     reasons = []
 
@@ -180,7 +198,7 @@ def compute_shelf_price(lot: LotState, now: float) -> PricingResult:
         lot.locked_anchor = compute_anchor_price()
     anchor = lot.locked_anchor
 
-    freshness = compute_freshness_score(lot, now)
+    freshness = compute_freshness_score(lot, now, visual_age_mult)
     multiplier = freshness_to_multiplier(freshness)
     raw = anchor * multiplier
 
@@ -224,27 +242,140 @@ def compute_shelf_price(lot: LotState, now: float) -> PricingResult:
 # ===========================================================================
 
 def price_from_inputs() -> PricingResult:
-    """Build a LotState from the module-level INPUTS and return the price."""
-    now = AGE_DAYS * 86400.0
-    lot = LotState(
-        lot_id="banana",
-        registered_at=0.0,
-        initial_weight_g=INITIAL_WEIGHT_G,
+    """CLI/demo: same pipeline as :func:`price_for_mongo_lot` using module INPUTS."""
+    nw = dt.datetime.now().replace(microsecond=0)
+    ra = nw - dt.timedelta(days=float(AGE_DAYS))
+    return price_for_mongo_lot(
+        received_at=ra,
+        now=nw,
+        initial_weight_g=float(INITIAL_WEIGHT_G),
+        current_weight_g=float(CURRENT_WEIGHT_G),
+        temperature_c=float(TEMPERATURE_C),
+        humidity_pct=float(HUMIDITY_PCT),
+        ripeness=None,
+        last_shown_price=None,
+        anchor_price=None,
     )
-    if AGE_DAYS > 0:
-        lot.add_reading(SensorReading(
-            timestamp=0.0,
-            weight_g=INITIAL_WEIGHT_G,
-            temperature_c=TEMPERATURE_C,
-            humidity_pct=HUMIDITY_PCT,
-        ))
-    lot.add_reading(SensorReading(
-        timestamp=now,
-        weight_g=CURRENT_WEIGHT_G,
-        temperature_c=TEMPERATURE_C,
-        humidity_pct=HUMIDITY_PCT,
-    ))
-    return compute_shelf_price(lot, now=now)
+
+
+def visual_multiplier_from_ripeness(ripeness: Optional[int]) -> float:
+    """Map camera / shelf ripeness 1–5 into PricingAlgo visual-age semantics.
+
+    Higher ripeness => looks older => larger multiplier (same direction as
+    ``VISUAL_AGE_MULTIPLIER`` > 1 in the module docstring).
+    """
+    if ripeness is None:
+        return VISUAL_AGE_MULTIPLIER
+    r = max(1, min(5, int(ripeness)))
+    return 0.82 + (r - 1) * (1.22 - 0.82) / 4.0
+
+
+def _per_lot_ripeness_and_weight_price_adjust(
+    ripeness: Optional[int], initial_weight_g: float, current_weight_g: float
+) -> tuple[float, float, float]:
+    """Extra multipliers so each batch differs by shelf ripeness + measured weight loss.
+
+    Returns ``(rip_adj, weight_loss_adj, combined)`` applied after the freshness pipeline.
+    """
+    if ripeness is None:
+        rip_adj = 1.0
+    else:
+        r = max(1, min(5, int(ripeness)))
+        # Fresher (1) holds a small premium; riper (5) discounts more than freshness alone.
+        rip_adj = 1.09 - (r - 1) * 0.0725
+    iw = max(1.0, float(initial_weight_g))
+    cw = max(1.0, float(current_weight_g))
+    wl = max(0.0, (iw - cw) / iw)
+    weight_loss_adj = 1.0 - min(0.2, wl * 0.55)
+    return rip_adj, weight_loss_adj, rip_adj * weight_loss_adj
+
+
+def price_for_mongo_lot(
+    *,
+    received_at: dt.datetime,
+    now: dt.datetime,
+    initial_weight_g: float,
+    current_weight_g: float,
+    temperature_c: float,
+    humidity_pct: float,
+    ripeness: Optional[int] = None,
+    last_shown_price: Optional[float] = None,
+    anchor_price: Optional[float] = None,
+) -> PricingResult:
+    """Run the shelf model for a real lot (Mongo + sensor style fields).
+
+    ``received_at`` / ``now`` may be tz-aware; they are converted to naive UTC
+    for age math. ``now`` in :func:`compute_shelf_price` is seconds since lot
+    registration (same convention as :func:`price_from_inputs`).
+
+    If ``anchor_price`` is a positive number (e.g. the food item's base retail
+    from Mongo), that value is used as the shelf anchor instead of the FAO
+    wholesale formula in :func:`compute_anchor_price`.
+    """
+    ra = received_at
+    nw = now
+    if ra.tzinfo is not None:
+        ra = ra.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    if nw.tzinfo is not None:
+        nw = nw.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    age_seconds = max(1.0, (nw - ra).total_seconds())
+
+    iw = max(1.0, float(initial_weight_g))
+    cw = max(1.0, float(current_weight_g))
+    tc = float(temperature_c)
+    hp = float(humidity_pct)
+    visual = visual_multiplier_from_ripeness(ripeness)
+
+    locked = 0.0
+    if anchor_price is not None:
+        try:
+            ap = float(anchor_price)
+            if ap > 0:
+                locked = max(DISTRIBUTOR_COST_PER_UNIT, min(ap, AFFORDABILITY_CEILING))
+        except (TypeError, ValueError):
+            locked = 0.0
+
+    lot = LotState(
+        lot_id="mongo",
+        registered_at=0.0,
+        initial_weight_g=iw,
+        last_shown_price=last_shown_price,
+        locked_anchor=locked,
+    )
+    lot.add_reading(
+        SensorReading(timestamp=0.0, weight_g=iw, temperature_c=tc, humidity_pct=hp)
+    )
+    lot.add_reading(
+        SensorReading(
+            timestamp=float(age_seconds),
+            weight_g=cw,
+            temperature_c=tc,
+            humidity_pct=hp,
+        )
+    )
+    result = compute_shelf_price(lot, now=float(age_seconds), visual_age_mult=visual)
+
+    _, _, combined = _per_lot_ripeness_and_weight_price_adjust(ripeness, iw, cw)
+    adapted = round(float(result.final_price) * combined, 2)
+    reasons = list(result.reason_codes)
+    if abs(combined - 1.0) > 1e-6:
+        reasons.append("per_lot_ripeness_weight_adjust")
+    adapted = max(DISTRIBUTOR_COST_PER_UNIT, adapted)
+    adapted = max(SNAP_MATCH_FLOOR, adapted)
+    adapted = min(AFFORDABILITY_CEILING, adapted)
+    adapted = round(adapted, 2)
+
+    raw_adj = round(float(result.final_price) * combined, 3)
+
+    return PricingResult(
+        anchor=result.anchor,
+        freshness_score=result.freshness_score,
+        multiplier=result.multiplier,
+        raw_price=raw_adj,
+        final_price=adapted,
+        should_update_display=result.should_update_display,
+        reason_codes=reasons,
+    )
 
 
 # ===========================================================================

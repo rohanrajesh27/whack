@@ -21,6 +21,8 @@ from werkzeug.security import generate_password_hash
 
 import dc_grocery
 from demo_seed import seed_store_catalog_if_empty
+from PricingAlgo import AVG_BANANA_WEIGHT_KG, price_for_mongo_lot
+from RestockAlgo import compute_restock
 from mongo_db import get_mongo_db
 from db_mongo import alloc_id, init_mongo, now_ts
 
@@ -235,12 +237,26 @@ def receive_data():
 
     first_key, first_val = next(iter(data.items()))
     if first_key == "flag" and first_val == 1:
+        db = get_mongo_db()
         try:
-            get_mongo_db()["ingest_pending"].replace_one(
+            db["ingest_pending"].replace_one(
                 {"_id": INGEST_PENDING_DOC_ID},
                 {"_id": INGEST_PENDING_DOC_ID, "payload": dict(data), "ts": now_ts()},
                 upsert=True,
             )
+        except Exception:
+            pass
+        try:
+            cam = dict(data)
+            key = _normalize_lot_label(
+                cam.get("product_code") or cam.get("lot_code") or cam.get("lot_id") or ""
+            )
+            if key:
+                lot_hit = _find_lot_by_batch_key(db, key)
+                if lot_hit is not None:
+                    fi0 = db.food_items.find_one({"_id": lot_hit["food_item_id"]})
+                    if fi0 is not None and _food_item_is_banana(fi0):
+                        _snapshot_camera_onto_lot(db, lot_hit, cam)
         except Exception:
             pass
         return render_template("receive_data_display.html", payload=data)
@@ -254,8 +270,15 @@ def receive_data():
             pend = db["ingest_pending"].find_one({"_id": INGEST_PENDING_DOC_ID})
             if pend and isinstance(pend.get("payload"), dict):
                 coll = db["logs"]
-                batch = merge_camera_and_telemetry_to_batch(dict(pend["payload"]), dict(data))
+                cam_p = dict(pend["payload"])
+                batch = merge_camera_and_telemetry_to_batch(cam_p, dict(data))
                 batch, lot_status = apply_batch_merge_to_lot(db, batch)
+                if lot_status == "lot_updated":
+                    k2 = _normalize_lot_label(batch.get("lot_id") or batch.get("product_code") or "")
+                    if k2:
+                        lot_u = _find_lot_by_batch_key(db, k2)
+                        if lot_u is not None:
+                            _snapshot_camera_onto_lot(db, lot_u, cam_p)
                 coll.insert_one(
                     {
                         "ts": now_ts(),
@@ -473,6 +496,67 @@ def _find_lot_by_batch_key(db, key: str):
     return lot
 
 
+def _snapshot_camera_onto_lot(db, lot: dict, cam: dict) -> None:
+    """Write latest ``camera.py`` / ingest fields onto the lot for live dashboard pricing."""
+    if not cam:
+        return
+    upd: dict = {"last_camera_at": datetime.datetime.now().replace(microsecond=0)}
+    rs = cam.get("ripeness_score")
+    if rs is not None:
+        try:
+            upd["last_camera_ripeness_score"] = max(1, min(5, int(round(float(rs)))))
+        except (TypeError, ValueError):
+            pass
+    wg = _coalesce_float(cam.get("weight_grams"), cam.get("weight_g"))
+    if wg is not None:
+        upd["last_camera_weight_g"] = float(wg)
+    tq = _coalesce_float(cam.get("temperature_c"), cam.get("temp_c"))
+    if tq is not None:
+        upd["last_camera_temp_c"] = float(tq)
+    hq = _coalesce_float(cam.get("humidity_pct"), cam.get("humidity_rh"))
+    if hq is not None:
+        upd["last_camera_humidity_pct"] = float(hq)
+    cap = cam.get("caption")
+    if isinstance(cap, str) and cap.strip():
+        upd["last_camera_caption"] = cap.strip()[:500]
+    db.lots.update_one({"_id": lot["_id"]}, {"$set": upd})
+
+
+def _banana_live_phys_for_pricing(lot: dict, cw: float, temp_c, humidity_rh) -> tuple[float, float, float]:
+    """Prefer ``last_camera_*`` on the lot, then fall back to merged lot + sensor values."""
+    cw_out = float(cw)
+    if lot.get("last_camera_weight_g") is not None:
+        try:
+            cw_out = float(lot["last_camera_weight_g"])
+        except (TypeError, ValueError):
+            pass
+    tc = float(temp_c if temp_c is not None else 22.0)
+    if lot.get("last_camera_temp_c") is not None:
+        try:
+            tc = float(lot["last_camera_temp_c"])
+        except (TypeError, ValueError):
+            pass
+    hp = float(humidity_rh if humidity_rh is not None else 60.0)
+    if lot.get("last_camera_humidity_pct") is not None:
+        try:
+            hp = float(lot["last_camera_humidity_pct"])
+        except (TypeError, ValueError):
+            pass
+    return cw_out, tc, hp
+
+
+def _banana_latest_weight_g_for_stock(db, lot: dict) -> float:
+    """Latest weight for unit estimates: sensor/merged lot, overridden by ``last_camera_weight_g``."""
+    sr_last = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", -1)])
+    cw = float((sr_last or {}).get("weight_g") or lot.get("weight_grams") or 1.0)
+    if lot.get("last_camera_weight_g") is not None:
+        try:
+            cw = float(lot["last_camera_weight_g"])
+        except (TypeError, ValueError):
+            pass
+    return cw
+
+
 def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     """If ``lot_id`` / ``product_code`` matches a banana lot, enrich + ``$set`` batch fields (never ``type``)."""
     key = _normalize_lot_label(batch.get("lot_id") or batch.get("product_code") or "")
@@ -615,6 +699,67 @@ def generate_barcode_for_item_id(item_id):
 def generate_image_url_for_item_id(item_id):
     # Deterministic placeholder image per item_id.
     return f"https://picsum.photos/seed/sku-{int(item_id)}/80"
+
+
+def _food_item_is_banana(fi: dict) -> bool:
+    return bool(fi and "banana" in (fi.get("name") or "").lower())
+
+
+def _pricing_anchor_from_food_item(fi: dict) -> Optional[float]:
+    """Use catalog base price as PricingAlgo anchor when set; else FAO formula in PricingAlgo."""
+    p = fi.get("price")
+    if p is None or p == "":
+        return None
+    try:
+        x = float(p)
+        return x if x > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _banana_implied_daily_sales_for_lot(lot: dict) -> float:
+    """One synthetic daily-sales sample per banana lot (length matches lot count for RestockAlgo)."""
+    rip = int(_ripeness_for_pricing_lot(lot) or 3)
+    wg = float(lot.get("weight_grams") or 0.0)
+    return round(2.5 + rip * 0.95 + min(wg / 350.0, 7.5), 2)
+
+
+def _ripeness_for_pricing_lot(lot: dict) -> Optional[int]:
+    """Integer 1–5 for PricingAlgo: prefer live ``last_camera_ripeness_score`` (``camera.py``), then lot fields."""
+    cam = lot.get("last_camera_ripeness_score")
+    if cam is not None and cam != "":
+        try:
+            return max(1, min(5, int(round(float(cam)))))
+        except (TypeError, ValueError):
+            pass
+    raw = lot.get("ripeness")
+    if raw is not None and raw != "":
+        try:
+            return max(1, min(5, int(round(float(raw)))))
+        except (TypeError, ValueError):
+            pass
+    dp = lot.get("discount_pct")
+    if dp is not None and dp != "":
+        try:
+            d = float(dp)
+            return max(1, min(5, int(round(d / 11.0)) + 1))
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _banana_units_estimate(weight_g) -> int:
+    grams = max(0.0, float(weight_g or 0.0))
+    per = max(float(AVG_BANANA_WEIGHT_KG) * 1000.0, 1.0)
+    return max(1, int(grams / per))
+
+
+def _rec_status_from_freshness(fresh: float) -> str:
+    if fresh >= 62.0:
+        return "ok"
+    if fresh >= 42.0:
+        return "soon"
+    return "urgent"
 
 
 def compute_markdown_recommendation(base_price, days_left):
@@ -951,6 +1096,11 @@ def dashboard():
         latest_weight_g = lot.get("weight_grams")
         if latest_weight_g is None and sr:
             latest_weight_g = sr.get("weight_g")
+        if _food_item_is_banana(fi) and lot.get("last_camera_weight_g") is not None:
+            try:
+                latest_weight_g = float(lot["last_camera_weight_g"])
+            except (TypeError, ValueError):
+                pass
         temp_c = lot.get("temperature_c")
         humidity_rh = lot.get("humidity_pct")
         if sr:
@@ -966,20 +1116,75 @@ def dashboard():
             if exp_dt is not None:
                 days_left = (exp_dt.date() - now.date()).days
 
-        rec = compute_markdown_recommendation(fi.get("price"), days_left)
-        batch_price = lot.get("recommended_price")
-        if batch_price is not None:
-            recommended_price = float(batch_price)
-            rec = {**rec, "recommended_price": recommended_price, "label": "Batch stored"}
-        else:
-            recommended_price = rec["recommended_price"]
+        recommended_price = None
+        rec = None
+        pricing_freshness = None
+        pricing_anchor = None
+
+        if _food_item_is_banana(fi):
+            try:
+                recv_raw = lot.get("received_at")
+                if isinstance(recv_raw, datetime.datetime):
+                    recv_dt = recv_raw
+                else:
+                    recv_dt = parse_storage_datetime(recv_raw) or now
+                if recv_dt.tzinfo is not None:
+                    recv_dt = recv_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+                now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+
+                first_sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", 1)])
+                if first_sr and first_sr.get("weight_g") is not None:
+                    iw = float(first_sr["weight_g"])
+                else:
+                    iw = float(lot.get("weight_grams") or latest_weight_g or 1.0)
+                cw = float(latest_weight_g or iw or 1.0)
+                tc0 = float(temp_c if temp_c is not None else 22.0)
+                hp0 = float(humidity_rh if humidity_rh is not None else 60.0)
+                cw, tc0, hp0 = _banana_live_phys_for_pricing(lot, cw, temp_c, humidity_rh)
+
+                rip_use = _ripeness_for_pricing_lot(lot)
+                pr_res = price_for_mongo_lot(
+                    received_at=recv_dt,
+                    now=now_naive,
+                    initial_weight_g=max(iw, 1.0),
+                    current_weight_g=max(cw, 1.0),
+                    temperature_c=tc0,
+                    humidity_pct=hp0,
+                    ripeness=rip_use,
+                    last_shown_price=None,
+                    anchor_price=_pricing_anchor_from_food_item(fi),
+                )
+                recommended_price = float(pr_res.final_price)
+                pricing_freshness = float(pr_res.freshness_score)
+                pricing_anchor = float(pr_res.anchor)
+                rip_lbl = rip_use if rip_use is not None else "—"
+                rec = {
+                    "status": _rec_status_from_freshness(pricing_freshness),
+                    "recommended_price": recommended_price,
+                    "label": f"PricingAlgo · rip {rip_lbl}",
+                }
+            except Exception:
+                recommended_price = None
+                rec = None
+                pricing_freshness = None
+                pricing_anchor = None
+
+        if rec is None:
+            rec = compute_markdown_recommendation(fi.get("price"), days_left)
+            batch_price = lot.get("recommended_price")
+            if batch_price is not None:
+                recommended_price = float(batch_price)
+                rec = {**rec, "recommended_price": recommended_price, "label": "Batch stored"}
+            else:
+                recommended_price = rec["recommended_price"]
+
         if recommended_price is not None:
-            if min_price is not None and recommended_price < min_price:
-                recommended_price = min_price
-                rec["label"] = f"{rec['label']} (floored)"
-            if max_price is not None and recommended_price > max_price:
-                recommended_price = max_price
-                rec["label"] = f"{rec['label']} (capped)"
+            if min_price is not None and recommended_price < float(min_price):
+                recommended_price = float(min_price)
+                rec = {**rec, "label": f"{rec['label']} (floored)"}
+            if max_price is not None and recommended_price > float(max_price):
+                recommended_price = float(max_price)
+                rec = {**rec, "label": f"{rec['label']} (capped)"}
 
         lot_label = _normalize_lot_label(lot.get("lot_code") or lot.get("lot_id") or "") or f"#{lot['_id']}"
         guardrails = None
@@ -1002,7 +1207,10 @@ def dashboard():
                 "received_at_human": format_datetime_for_store_users(lot.get("received_at")),
                 "expires_at_human": format_date_for_store_users(lot.get("expires_at") or lot.get("expiration")),
                 "days_left": days_left,
-                "ripeness": lot.get("ripeness"),
+                "ripeness": (
+                    (_ripeness_for_pricing_lot(lot) if _food_item_is_banana(fi) else None)
+                    or lot.get("ripeness")
+                ),
                 "discount_pct": lot.get("discount_pct"),
                 "temperature_c": temp_c,
                 "humidity_pct": humidity_rh,
@@ -1013,8 +1221,76 @@ def dashboard():
                 "min_price": min_price,
                 "max_price": max_price,
                 "guardrails": guardrails,
+                "pricing_freshness": pricing_freshness,
+                "pricing_anchor": pricing_anchor,
             }
         )
+
+    banana_restock = None
+    banana_ctx = [
+        (lot, fi_by_id[lot["food_item_id"]])
+        for lot in lots_for_inv
+        if fi_by_id.get(lot["food_item_id"]) and _food_item_is_banana(fi_by_id[lot["food_item_id"]])
+    ]
+    if banana_ctx:
+        daily_sales = [_banana_implied_daily_sales_for_lot(lot) for lot, _ in banana_ctx]
+        stock_units = sum(
+            _banana_units_estimate(_banana_latest_weight_g_for_stock(db, lot)) for lot, _ in banana_ctx
+        )
+        model_prices: list[float] = []
+        for lot, fi in banana_ctx:
+            try:
+                recv_raw = lot.get("received_at")
+                if isinstance(recv_raw, datetime.datetime):
+                    recv_dt = recv_raw
+                else:
+                    recv_dt = parse_storage_datetime(recv_raw) or now
+                if recv_dt.tzinfo is not None:
+                    recv_dt = recv_dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+                now_naive = now.replace(tzinfo=None) if now.tzinfo else now
+                first_sr = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", 1)])
+                if first_sr and first_sr.get("weight_g") is not None:
+                    iw = float(first_sr["weight_g"])
+                else:
+                    iw = float(lot.get("weight_grams") or 1.0)
+                sr_last = db.sensor_readings.find_one({"lot_id": lot["_id"]}, sort=[("recorded_at", -1)])
+                cw = float((sr_last or {}).get("weight_g") or lot.get("weight_grams") or iw)
+                tc0 = float(lot.get("temperature_c") or (sr_last or {}).get("temp_c") or 22.0)
+                hp0 = float(lot.get("humidity_pct") or (sr_last or {}).get("humidity_rh") or 60.0)
+                cw, tc0, hp0 = _banana_live_phys_for_pricing(lot, cw, tc0, hp0)
+                rip_use = _ripeness_for_pricing_lot(lot)
+                pr_res = price_for_mongo_lot(
+                    received_at=recv_dt,
+                    now=now_naive,
+                    initial_weight_g=max(iw, 1.0),
+                    current_weight_g=max(cw, 1.0),
+                    temperature_c=tc0,
+                    humidity_pct=hp0,
+                    ripeness=rip_use,
+                    last_shown_price=None,
+                    anchor_price=_pricing_anchor_from_food_item(fi),
+                )
+                model_prices.append(float(pr_res.final_price))
+            except Exception:
+                continue
+        ref_price = float(banana_ctx[0][1].get("price") or 0.32)
+        avg_price = sum(model_prices) / len(model_prices) if model_prices else ref_price
+        rr = compute_restock(avg_price, current_stock_units=stock_units, recent_daily_sales=daily_sales)
+        banana_restock = {
+            "lots": len(banana_ctx),
+            "model_avg_price": round(avg_price, 2),
+            "stock_units": stock_units,
+            "daily_sales_per_lot": daily_sales,
+            "velocity_avg": rr.base_velocity,
+            "velocity_adj": rr.adjusted_velocity,
+            "days_supply": rr.days_of_supply,
+            "reorder_point": rr.reorder_point,
+            "should_reorder": rr.should_reorder,
+            "suggested_qty": rr.suggested_order_qty,
+            "stockout_risk_pct": rr.stockout_risk_pct,
+            "alert_level": rr.alert_level,
+            "alert_message": rr.alert_message,
+        }
 
     fis_store = list(db.food_items.find({"store_id": store_id}))
     fi_dept = {
@@ -1085,6 +1361,7 @@ def dashboard():
         selected_food_item_id=selected_food_item_id,
         sku_sort=sku_sort,
         city_admin=bool(session.get("city_admin")),
+        banana_restock=banana_restock,
     )
 
 

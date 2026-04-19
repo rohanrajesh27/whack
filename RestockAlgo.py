@@ -5,10 +5,9 @@ Track 2: GW Global Food Institute | Problem Statement 2
 Edit the INPUTS section at the top of the file, then run:
     python3 banana_restock.py
 
-This file imports the current shelf price from banana_price.py so the
-supply-demand loop is honest: a lower shelf price (freshness markdown)
-means faster projected sell-through, which means the reorder trigger
-fires sooner. The two files are linked but stay separate.
+This file imports the current shelf price from ``PricingAlgo.price_from_inputs``
+(same engine as ``price_for_mongo_lot`` on the web) so the supply-demand loop
+uses the same freshness pipeline as the dashboard.
 
 Formula:
     Reorder Point  = (daily_sales * lead_time) + safety_stock
@@ -118,40 +117,50 @@ def compute_stockout_risk(
     return round(stockout_prob * 100.0, 1)
 
 
-def compute_restock(current_price: float) -> RestockResult:
-    """Full restock pipeline. Takes the current shelf price to close the loop."""
-    base_velocity = _mean(RECENT_DAILY_SALES)
-    velocity_std = _stdev(RECENT_DAILY_SALES)
+def compute_restock(
+    current_price: float,
+    *,
+    current_stock_units: int | None = None,
+    recent_daily_sales: list[float] | None = None,
+    lead_time_days: int | None = None,
+) -> RestockResult:
+    """Full restock pipeline. Takes the current shelf price to close the loop.
+
+    When ``current_stock_units`` / ``recent_daily_sales`` are omitted, module
+    defaults (``CURRENT_STOCK_UNITS``, ``RECENT_DAILY_SALES``) are used so the
+    CLI keeps working. Pass one float per banana **lot** (e.g. three lots) in
+    ``recent_daily_sales`` so velocity mean/std reflect your batches.
+    """
+    stock = int(current_stock_units) if current_stock_units is not None else int(CURRENT_STOCK_UNITS)
+    sales = list(recent_daily_sales) if recent_daily_sales is not None else list(RECENT_DAILY_SALES)
+    if len(sales) < 2:
+        sales = sales + [sales[-1]] * (2 - len(sales)) if sales else [1.0, 1.0]
+    lt = int(LEAD_TIME_DAYS) if lead_time_days is None else int(lead_time_days)
+
+    base_velocity = _mean(sales)
+    velocity_std = _stdev(sales)
     adjusted_velocity = compute_adjusted_velocity(base_velocity, current_price)
 
-    days_of_supply = (
-        CURRENT_STOCK_UNITS / adjusted_velocity
-        if adjusted_velocity > 0 else float("inf")
+    days_of_supply = stock / adjusted_velocity if adjusted_velocity > 0 else float("inf")
+
+    safety_stock = int(
+        math.ceil(
+            SERVICE_LEVEL_Z * velocity_std * math.sqrt(lt)
+            + adjusted_velocity * SAFETY_BUFFER_DAYS
+        )
+    )
+    reorder_point = int(math.ceil(adjusted_velocity * lt + safety_stock))
+
+    should_reorder = stock <= reorder_point
+
+    target_stock = int(math.ceil(adjusted_velocity * (lt + REVIEW_PERIOD_DAYS) + safety_stock))
+    suggested_order_qty = (
+        max(0, min(target_stock - stock, MAX_SHELF_CAPACITY - stock)) if should_reorder else 0
     )
 
-    safety_stock = int(math.ceil(
-        SERVICE_LEVEL_Z * velocity_std * math.sqrt(LEAD_TIME_DAYS)
-        + adjusted_velocity * SAFETY_BUFFER_DAYS
-    ))
-    reorder_point = int(math.ceil(
-        adjusted_velocity * LEAD_TIME_DAYS + safety_stock
-    ))
+    stockout_risk = compute_stockout_risk(stock, adjusted_velocity, velocity_std, lt)
 
-    should_reorder = CURRENT_STOCK_UNITS <= reorder_point
-
-    target_stock = int(math.ceil(
-        adjusted_velocity * (LEAD_TIME_DAYS + REVIEW_PERIOD_DAYS) + safety_stock
-    ))
-    suggested_order_qty = max(0, min(
-        target_stock - CURRENT_STOCK_UNITS,
-        MAX_SHELF_CAPACITY - CURRENT_STOCK_UNITS,
-    )) if should_reorder else 0
-
-    stockout_risk = compute_stockout_risk(
-        CURRENT_STOCK_UNITS, adjusted_velocity, velocity_std, LEAD_TIME_DAYS
-    )
-
-    if CURRENT_STOCK_UNITS <= reorder_point * 0.5 or stockout_risk >= 40:
+    if stock <= reorder_point * 0.5 or stockout_risk >= 40:
         alert_level = "red"
         alert_message = "ORDER NOW - high stockout risk before next delivery"
     elif should_reorder:
@@ -162,7 +171,7 @@ def compute_restock(current_price: float) -> RestockResult:
         alert_message = f"Plenty of stock ({days_of_supply:.1f} days of supply)"
 
     return RestockResult(
-        current_stock=CURRENT_STOCK_UNITS,
+        current_stock=stock,
         base_velocity=round(base_velocity, 2),
         adjusted_velocity=round(adjusted_velocity, 2),
         velocity_std=round(velocity_std, 2),
