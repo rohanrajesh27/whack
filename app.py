@@ -24,6 +24,9 @@ from demo_seed import seed_store_catalog_if_empty
 from mongo_db import get_mongo_db
 from db_mongo import alloc_id, init_mongo, now_ts
 
+import PricingAlgo as _PA
+import RestockAlgo as _RA
+
 from dotenv import load_dotenv
 
 app = Flask("app")
@@ -473,6 +476,48 @@ def _find_lot_by_batch_key(db, key: str):
     return lot
 
 
+_RIPENESS_TO_VISUAL_MULT: dict[int, float] = {1: 0.7, 2: 0.85, 3: 1.0, 4: 1.3, 5: 1.7}
+
+
+def _pricing_algo_for_lot(lot_doc: dict, weight_g, temp_c, humidity_pct, ripeness):
+    """Run PricingAlgo with real sensor readings. Returns PricingResult or None on failure."""
+    try:
+        received_at = lot_doc.get("received_at") or datetime.datetime.now()
+        if not isinstance(received_at, datetime.datetime):
+            received_at = parse_storage_datetime(received_at) or datetime.datetime.now()
+        age_days = max(0.0, (datetime.datetime.now() - received_at).total_seconds() / 86400.0)
+
+        r = max(1, min(5, int(ripeness or 3)))
+        _PA.VISUAL_AGE_MULTIPLIER = _RIPENESS_TO_VISUAL_MULT.get(r, 1.0)
+
+        init_w = float(weight_g or _PA.INITIAL_WEIGHT_G)
+        t = float(temp_c or _PA.TEMPERATURE_C)
+        h = float(humidity_pct or _PA.HUMIDITY_PCT)
+        now_ts_f = age_days * 86400.0
+
+        lot_state = _PA.LotState(
+            lot_id=str(lot_doc.get("lot_code") or lot_doc["_id"]),
+            registered_at=0.0,
+            initial_weight_g=init_w,
+        )
+        if age_days > 0:
+            lot_state.add_reading(_PA.SensorReading(0.0, init_w, t, h))
+        lot_state.add_reading(_PA.SensorReading(now_ts_f, init_w, t, h))
+        return _PA.compute_shelf_price(lot_state, now=now_ts_f)
+    except Exception:
+        return None
+
+
+def _restock_algo_for_lot(current_price, weight_g):
+    """Run RestockAlgo using weight-derived stock estimate. Returns RestockResult or None."""
+    try:
+        est_stock = max(1, int(round(float(weight_g) / 120.0))) if weight_g else _RA.CURRENT_STOCK_UNITS
+        _RA.CURRENT_STOCK_UNITS = est_stock
+        return _RA.compute_restock(float(current_price or _RA.REFERENCE_PRICE))
+    except Exception:
+        return None
+
+
 def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     """If ``lot_id`` / ``product_code`` matches a banana lot, enrich + ``$set`` batch fields (never ``type``)."""
     key = _normalize_lot_label(batch.get("lot_id") or batch.get("product_code") or "")
@@ -509,7 +554,6 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
             r = 3
         r = max(1, min(5, r))
 
-    discount_pct = float(_DISCOUNT_PCT_BY_RIPENESS.get(r, 22.0))
     dl = batch.get("days_left")
     if dl is None:
         days_left = int(_DAYSLEFT_BY_RIPENESS.get(r, 4))
@@ -521,13 +565,35 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
 
     base_price = float(fi.get("price") or 0.0)
     pr = db.pricing_rules.find_one({"food_item_id": fi["_id"]})
-    rec = round(base_price * (1.0 - discount_pct / 100.0), 2)
+
+    pricing_result = _pricing_algo_for_lot(
+        lot,
+        batch.get("weight_grams"),
+        batch.get("temperature_c"),
+        batch.get("humidity_pct"),
+        r,
+    )
+    if pricing_result is not None:
+        freshness_score = pricing_result.freshness_score
+        multiplier = pricing_result.multiplier
+        if base_price > 0:
+            rec = round(base_price * multiplier, 2)
+        else:
+            rec = pricing_result.final_price
+        discount_pct = round((1.0 - multiplier) * 100.0, 1)
+    else:
+        freshness_score = None
+        discount_pct = float(_DISCOUNT_PCT_BY_RIPENESS.get(r, 22.0))
+        rec = round(base_price * (1.0 - discount_pct / 100.0), 2)
+
     if pr is not None:
         mn, mx = pr.get("min_price"), pr.get("max_price")
         if mn is not None and rec < float(mn):
             rec = float(mn)
         if mx is not None and rec > float(mx):
             rec = float(mx)
+
+    restock_result = _restock_algo_for_lot(rec, batch.get("weight_grams"))
 
     now = datetime.datetime.now().replace(microsecond=0)
     exp_dt = now + datetime.timedelta(days=days_left)
@@ -541,6 +607,12 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     out["days_left"] = days_left
     out["expiration"] = exp_dt.isoformat(sep=" ")
     out["lot_match"] = True
+    out["freshness_score"] = freshness_score
+    if restock_result is not None:
+        out["restock_alert_level"] = restock_result.alert_level
+        out["restock_message"] = restock_result.alert_message
+        out["suggested_order_qty"] = restock_result.suggested_order_qty
+        out["stockout_risk_pct"] = restock_result.stockout_risk_pct
     sid = fi.get("store_id")
     if sid is not None:
         out["store_id"] = int(sid)
@@ -555,6 +627,13 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
         "lot_id": canonical,
         "lot_code": canonical,
     }
+    if freshness_score is not None:
+        set_doc["freshness_score"] = freshness_score
+    if restock_result is not None:
+        set_doc["restock_alert_level"] = restock_result.alert_level
+        set_doc["restock_message"] = restock_result.alert_message
+        set_doc["suggested_order_qty"] = restock_result.suggested_order_qty
+        set_doc["stockout_risk_pct"] = restock_result.stockout_risk_pct
     if sid is not None:
         set_doc["store_id"] = int(sid)
     for fld in ("weight_grams", "temperature_c", "humidity_pct"):
@@ -988,6 +1067,35 @@ def dashboard():
             hi = f"${float(max_price):.2f}" if max_price is not None else "—"
             guardrails = f"{lo} – {hi}"
 
+        live_pricing = _pricing_algo_for_lot(lot, latest_weight_g, temp_c, humidity_rh, lot.get("ripeness"))
+        if live_pricing is not None:
+            freshness_score = live_pricing.freshness_score
+            live_rec_price = round(float(fi.get("price") or 0) * live_pricing.multiplier, 2) if fi.get("price") else live_pricing.final_price
+            if min_price is not None and live_rec_price < float(min_price):
+                live_rec_price = float(min_price)
+            if max_price is not None and live_rec_price > float(max_price):
+                live_rec_price = float(max_price)
+            if recommended_price is None:
+                recommended_price = live_rec_price
+            live_discount_pct = round((1.0 - live_pricing.multiplier) * 100.0, 1)
+        else:
+            freshness_score = lot.get("freshness_score")
+            live_discount_pct = lot.get("discount_pct")
+
+        live_restock = _restock_algo_for_lot(recommended_price, latest_weight_g)
+        if live_restock is not None:
+            restock_alert_level = live_restock.alert_level
+            restock_message = live_restock.alert_message
+            suggested_order_qty = live_restock.suggested_order_qty if live_restock.should_reorder else None
+        else:
+            restock_alert_level = lot.get("restock_alert_level")
+            restock_message = lot.get("restock_message")
+            suggested_order_qty = lot.get("suggested_order_qty")
+
+        if live_pricing is not None:
+            rec["label"] = f"Fresh {freshness_score:.0f}/100"
+            rec["status"] = "ok" if freshness_score >= 70 else ("soon" if freshness_score >= 40 else "urgent")
+
         inventory_rows.append(
             {
                 "lot_id": lot["_id"],
@@ -1003,7 +1111,7 @@ def dashboard():
                 "expires_at_human": format_date_for_store_users(lot.get("expires_at") or lot.get("expiration")),
                 "days_left": days_left,
                 "ripeness": lot.get("ripeness"),
-                "discount_pct": lot.get("discount_pct"),
+                "discount_pct": live_discount_pct if live_pricing is not None else lot.get("discount_pct"),
                 "temperature_c": temp_c,
                 "humidity_pct": humidity_rh,
                 "latest_weight_g": latest_weight_g,
@@ -1013,6 +1121,10 @@ def dashboard():
                 "min_price": min_price,
                 "max_price": max_price,
                 "guardrails": guardrails,
+                "freshness_score": freshness_score,
+                "restock_alert_level": restock_alert_level,
+                "restock_message": restock_message,
+                "suggested_order_qty": suggested_order_qty,
             }
         )
 

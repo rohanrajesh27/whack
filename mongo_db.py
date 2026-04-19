@@ -75,11 +75,10 @@ def get_mongo_client() -> MongoClient:
         uri = _normalize_mongodb_uri(os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017"))
         _check_srv_hostname(uri)
         try:
-            _client = MongoClient(
-                uri,
-                serverSelectionTimeoutMS=5000,
-                tlsCAFile=certifi.where(),
-            )
+            kwargs: dict = {"serverSelectionTimeoutMS": 5000}
+            if uri.startswith("mongodb+srv://"):
+                kwargs["tlsCAFile"] = certifi.where()
+            _client = MongoClient(uri, **kwargs)
         except ConfigurationError as e:
             msg = str(e)
             hint = ""

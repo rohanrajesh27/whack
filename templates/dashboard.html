@@ -178,6 +178,8 @@
               <div title="Temperature °C">°C</div>
               <div title="Relative humidity %">Humidity</div>
               <div title="Weight (latest)">Wt g</div>
+              <div title="Freshness score 0–100 (PricingAlgo)">Freshness</div>
+              <div title="Restock alert (RestockAlgo)">Restock</div>
             </div>
 
             {% if inventory_rows|length == 0 %}
@@ -256,6 +258,32 @@
                     <span class="muted">—</span>
                   {% else %}
                     {{ "%.0f"|format(r.latest_weight_g) }}
+                  {% endif %}
+                </div>
+
+                <div>
+                  {% if r.freshness_score is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {% if r.freshness_score >= 70 %}
+                      <span class="badge badge--ok">{{ "%.0f"|format(r.freshness_score) }}/100</span>
+                    {% elif r.freshness_score >= 40 %}
+                      <span class="badge badge--soon">{{ "%.0f"|format(r.freshness_score) }}/100</span>
+                    {% else %}
+                      <span class="badge badge--urgent">{{ "%.0f"|format(r.freshness_score) }}/100</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+
+                <div>
+                  {% if r.restock_alert_level %}
+                    {% set badge_cls = "badge--ok" if r.restock_alert_level == "green" else ("badge--soon" if r.restock_alert_level == "yellow" else "badge--urgent") %}
+                    <span class="badge {{ badge_cls }}">{{ r.restock_message }}</span>
+                    {% if r.suggested_order_qty %}
+                      <div class="mono" style="font-size:0.75em;margin-top:2px;">Order {{ r.suggested_order_qty }} units</div>
+                    {% endif %}
+                  {% else %}
+                    <span class="muted">—</span>
                   {% endif %}
                 </div>
               </div>

@@ -1380,9 +1380,9 @@ main.container.stack {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Inventory: batch kind, qty, disc %, pricing, expires, days, ripeness, °C, humidity, wt g */
+/* Inventory: batch kind, qty, disc %, pricing, expires, days, ripeness, °C, humidity, wt g, freshness, restock */
 .table.table--inventory {
-  min-width: 1040px;
+  min-width: 1300px;
 }
 
 .table--inventory .table__row {
@@ -1396,7 +1396,9 @@ main.container.stack {
     minmax(0, 0.55fr)
     minmax(0, 0.5fr)
     minmax(0, 0.55fr)
-    minmax(0, 0.55fr);
+    minmax(0, 0.55fr)
+    minmax(0, 0.65fr)
+    minmax(0, 1.6fr);
 }
 
 .table--inventory .table__row > * {
