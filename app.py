@@ -37,19 +37,52 @@ def _with_id(doc):
         d["id"] = d.pop("_id")
     return d
 
+@app.route("logs")
+def logs():
+    # Show a simple page listing recent POST payloads where the first key is 'flag' and value is 1.
+    db = get_mongo_db()
+    logs_collection = db["logs"]
+
+    # Find recent entries where the POST body (stored as 'payload') is a dict and its first key/value are 'flag':1
+    entries = logs_collection.find().sort("ts", -1).limit(100)
+    results = []
+    for entry in entries:
+        payload = entry.get("payload")
+        if isinstance(payload, dict) and payload:
+            first_key, first_val = next(iter(payload.items()))
+            if first_key == 'flag' and first_val == 1:
+                results.append({
+                    "payload": payload,
+                    "ts": entry.get("ts"),
+                })
+    # Render logs.html, expecting it to show .payload and .ts
+    return render_template("logs.html", logs=results)
+
 @app.route('/receive-data', methods=['POST'])
 def receive_data():
-    # Check if the request contains valid JSON
-    if request.is_json:
-        data = request.get_json()  # Parse JSON data from request
-        weight = data.get('weight')
-        message = data.get('message')
-
-        # Process the received data
-        return jsonify(status='success', weight=weight, message=message), 200
-    else:
-        # Invalid request format
+    if not request.is_json:
         return jsonify(status='error', message='Request must be JSON'), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not data:
+        return jsonify(status='error', message='JSON body must be a non-empty object'), 400
+
+    first_key, first_val = next(iter(data.items()))
+    if first_key == 'flag' and first_val == 1:
+        return render_template('receive_data_display.html', payload=data)
+
+    # Legacy: pinger-style payloads (weight + message)
+    if 'weight' in data and 'message' in data:
+        return jsonify(
+            status='success',
+            weight=data.get('weight'),
+            message=data.get('message'),
+        ), 200
+
+    return jsonify(
+        status='error',
+        message='First JSON field must be "flag" with value 1, or send weight and message.',
+    ), 400
 
 
 @app.before_request

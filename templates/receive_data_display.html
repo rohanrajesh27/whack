@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Received data{% endblock %}
+{% block content %}
+  <main class="card" style="margin: 2rem auto; max-width: 640px;">
+    <h1>Received payload</h1>
+    <p>Camera analysis (flag&nbsp;=&nbsp;1).</p>
+    <dl style="margin: 1.25rem 0 0; display: grid; gap: 0.75rem 1rem; grid-template-columns: auto 1fr;">
+      {% for key, value in payload.items() %}
+        <dt style="margin: 0; color: var(--muted); font-weight: 600;">{{ key }}</dt>
+        <dd style="margin: 0; word-break: break-word;">{% if value is none %}<em>null</em>{% else %}{{ value }}{% endif %}</dd>
+      {% endfor %}
+    </dl>
+    <h2 style="margin: 1.5rem 0 0.5rem; font-size: 1rem; color: var(--muted);">Raw JSON</h2>
+    <pre style="margin: 0; padding: 1rem; background: rgba(0,0,0,0.35); border-radius: 12px; overflow: auto; font-size: 0.875rem; border: 1px solid rgba(255,255,255,0.1);">{{ payload | tojson(indent=2) }}</pre>
+  </main>
+{% endblock %}
