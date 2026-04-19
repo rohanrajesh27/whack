@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from PIL import Image
 from torchvision import models, transforms
 
-from ripeness_keywords import infer_ripeness_score
+from ripeness import classify_ripeness
 
 load_dotenv()
 
@@ -237,12 +237,10 @@ def main() -> None:
 
     print("\nRunning analysis — please wait...\n")
 
-    # Same PIL image: ImageNet classification (ResNet) + OCR (Tesseract).
+    # BLIP handles captioning + ripeness; ResNet still used for product name fallback.
+    ripeness_score, caption = classify_ripeness(image)
     top_classes = classify_image(image, top_k=5)
     raw_text = extract_text(image)
-
-    caption = ", ".join(label for label, _ in top_classes)
-    ripeness_score = infer_ripeness_score(caption)
     product_code = extract_product_code(raw_text)
 
     product_name = infer_product_name(caption, top_classes)
