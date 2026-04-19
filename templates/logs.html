@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Camera POST logs{% endblock %}
+{% block content %}
+  <main class="card" style="margin: 2rem auto; max-width: 720px;">
+    <h1>Recent camera payloads</h1>
+    <p>Entries where the stored JSON object’s first field is <code>flag</code> with value <code>1</code>, newest first (up to 100).</p>
+    {% if not logs %}
+      <p style="margin-top: 1rem; color: var(--muted);">No matching log entries yet. POST a <code>flag: 1</code> payload to <code>/receive-data</code> first.</p>
+    {% else %}
+      <ul style="list-style: none; margin: 1.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 1.25rem;">
+        {% for row in logs %}
+          <li style="padding: 1rem; background: rgba(0,0,0,0.25); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="font-size: 0.875rem; color: var(--muted); margin-bottom: 0.5rem;">{{ row.ts }}</div>
+            <pre style="margin: 0; padding: 0.75rem; overflow: auto; font-size: 0.8125rem; background: rgba(0,0,0,0.2); border-radius: 8px;">{{ row.payload | tojson(indent=2) }}</pre>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </main>
+{% endblock %}

@@ -24,6 +24,8 @@ from db_mongo import alloc_id, init_mongo, now_ts
 from dotenv import load_dotenv
 
 app = Flask("app")
+# Treat `https://host//logs` like `/logs` (path rule matching); requires Flask 2.2+.
+app.config["MERGE_SLASHES"] = True
 FLASK_ENV = "development"
 app.secret_key = "CHANGE ME"
 
@@ -36,6 +38,21 @@ def _with_id(doc):
     if "_id" in d:
         d["id"] = d.pop("_id")
     return d
+
+
+_LOGS_MAX_ENTRIES = 100
+
+
+def _trim_logs_collection(coll) -> None:
+    """Remove oldest documents so ``logs`` stays at most ``_LOGS_MAX_ENTRIES`` rows."""
+    n = coll.count_documents({})
+    if n <= _LOGS_MAX_ENTRIES:
+        return
+    excess = n - _LOGS_MAX_ENTRIES
+    ids = [doc["_id"] for doc in coll.find({}, {"_id": 1}).sort("ts", 1).limit(excess)]
+    if ids:
+        coll.delete_many({"_id": {"$in": ids}})
+
 
 @app.route("/logs")
 def logs():
@@ -69,6 +86,13 @@ def receive_data():
 
     first_key, first_val = next(iter(data.items()))
     if first_key == 'flag' and first_val == 1:
+        try:
+            coll = get_mongo_db()["logs"]
+            coll.insert_one({"ts": now_ts(), "payload": dict(data)})
+            _trim_logs_collection(coll)
+        except Exception:
+            # Still show confirmation page if logging fails (e.g. DB misconfigured).
+            pass
         return render_template('receive_data_display.html', payload=data)
 
     # Legacy: pinger-style payloads (weight + message)
