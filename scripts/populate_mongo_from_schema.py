@@ -162,6 +162,7 @@ def populate(
                 db.lots.insert_one(
                     {
                         "_id": lid,
+                        "store_id": sid,
                         "food_item_id": fid,
                         "lot_code": lot_code,
                         "received_at": received,

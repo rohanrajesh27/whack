@@ -1,9 +1,9 @@
 """Demo data + banana pilot batches for store 1.
 
-Pilot IDs (stable labels ``ST1-I1-B#-###``):
+Pilot IDs (stable labels ``ST1-I{item}-B#-###`` — letter ``I`` before the item digit so codes are not read as ``11``, ``12``, …):
 
 - ``STORE_PILOT_ID = 1``
-- ``BANANA_ITEM_PILOT_ID = 1``
+- ``BANANA_ITEM_PILOT_ID = 1`` (e.g. ``ST1-I1-B1-334``)
 
 Each **lot** (batch) document includes:
 
@@ -66,7 +66,7 @@ def _sync_counters_from_collections(db) -> None:
 
 
 def _batch_label(store_id: int, food_item_id: int, batch_index: int, suffix_three: int) -> str:
-    """Pattern ST#-I#-B#-### (### is a three-digit suffix, e.g. 001)."""
+    """Pattern ST#-I#-B#-### (### is a three-digit suffix, e.g. 001, 334)."""
     return f"ST{store_id}-I{food_item_id}-B{batch_index}-{suffix_three:03d}"
 
 
@@ -132,9 +132,9 @@ def _insert_lot_with_batch_schema(
 def _insert_three_banana_lots(db, *, store_id: int, food_item_id: int, price: float) -> None:
     now = dt.datetime.now().replace(microsecond=0)
     specs = [
-        (1, 1, 980.0, 4.0, 54.0, 2, now + dt.timedelta(days=5), now - dt.timedelta(hours=20)),
-        (2, 2, 1020.0, 3.6, 56.0, 3, now + dt.timedelta(days=3), now - dt.timedelta(hours=14)),
-        (3, 3, 890.0, 5.1, 48.0, 4, now + dt.timedelta(days=1), now - dt.timedelta(hours=8)),
+        (1, 334, 980.0, 4.0, 54.0, 2, now + dt.timedelta(days=5), now - dt.timedelta(hours=20)),
+        (2, 1, 1020.0, 3.6, 56.0, 3, now + dt.timedelta(days=3), now - dt.timedelta(hours=14)),
+        (3, 2, 890.0, 5.1, 48.0, 4, now + dt.timedelta(days=1), now - dt.timedelta(hours=8)),
     ]
     for batch_index, suffix_three, w, t, h, rip, exp, recv in specs:
         _insert_lot_with_batch_schema(
@@ -169,7 +169,7 @@ def _ensure_pricing_rule(db, food_item_id: int, price: float) -> None:
 
 
 def seed_minimal_demo(db=None) -> int:
-    """Wipe business data; create store 1, banana SKU 1, three lots ``ST1-I1-B#-###``."""
+    """Wipe business data; create store 1, banana SKU 1, three lots ``ST1-I1-B#-###`` (incl. ``ST1-I1-B1-334``)."""
     db = db or get_mongo_db()
     clear_business_collections(db)
 
@@ -211,12 +211,14 @@ def reseed_banana_lots_for_store(db=None, store_id: int = STORE_PILOT_ID) -> boo
     if fi is None:
         return False
     fid = int(fi["_id"])
-    lids = [x["_id"] for x in db.lots.find({"food_item_id": fid}, {"_id": 1})]
+    lot_store = int(fi.get("store_id") or store_id)
+    lot_q = {"food_item_id": fid, "store_id": lot_store}
+    lids = [x["_id"] for x in db.lots.find(lot_q, {"_id": 1})]
     if lids:
         db.sensor_readings.delete_many({"lot_id": {"$in": lids}})
-    db.lots.delete_many({"food_item_id": fid})
+    db.lots.delete_many(lot_q)
     price = float(fi.get("price") or 0.79)
-    _insert_three_banana_lots(db, store_id=store_id, food_item_id=fid, price=price)
+    _insert_three_banana_lots(db, store_id=lot_store, food_item_id=fid, price=price)
     _sync_counters_from_collections(db)
     return True
 

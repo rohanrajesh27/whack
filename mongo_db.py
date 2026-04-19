@@ -29,6 +29,7 @@ except ImportError:
 
 from urllib.parse import urlparse
 
+import certifi
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.errors import ConfigurationError
@@ -74,7 +75,11 @@ def get_mongo_client() -> MongoClient:
         uri = _normalize_mongodb_uri(os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017"))
         _check_srv_hostname(uri)
         try:
-            _client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+            _client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=5000,
+                tlsCAFile=certifi.where(),
+            )
         except ConfigurationError as e:
             msg = str(e)
             hint = ""

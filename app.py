@@ -10,6 +10,7 @@ except ImportError:
 import hashlib
 import os
 import random
+import re
 import datetime
 from collections import defaultdict
 from functools import wraps
@@ -384,11 +385,44 @@ _DISCOUNT_PCT_BY_RIPENESS: dict[int, float] = {1: 0.0, 2: 10.0, 3: 22.0, 4: 35.0
 _DAYSLEFT_BY_RIPENESS: dict[int, int] = {1: 7, 2: 5, 3: 4, 4: 2, 5: 0}
 
 
+def _batch_code_lookup_clauses(key: str) -> list[dict]:
+    """Build ``$or`` clauses so ``ST1-I1-…`` lots match OCR-normalised ``ST1-11-…`` (I→1) keys."""
+    k = str(key).strip()
+    if not k:
+        return []
+    clauses: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(v: str) -> None:
+        v = v.strip()
+        if not v:
+            return
+        for fld in ("lot_code", "lot_id"):
+            t = (fld, v)
+            if t not in seen:
+                seen.add(t)
+                clauses.append({fld: v})
+
+    ku = k.upper().replace(" ", "")
+    add(k)
+    if ku != k:
+        add(ku)
+    m = re.fullmatch(r"(ST\d+)-11-(B\d+-\d{3})", ku)
+    if m:
+        add(f"{m.group(1)}-I1-{m.group(2)}")
+    m2 = re.fullmatch(r"(ST\d+)-I1-(B\d+-\d{3})", ku, flags=re.IGNORECASE)
+    if m2:
+        add(f"{m2.group(1)}-11-{m2.group(2)}")
+    return clauses
+
+
 def _find_lot_by_batch_key(db, key: str):
     if not key or not str(key).strip():
         return None
-    k = str(key).strip()
-    return db.lots.find_one({"$or": [{"lot_code": k}, {"lot_id": k}]})
+    clauses = _batch_code_lookup_clauses(key)
+    if not clauses:
+        return None
+    return db.lots.find_one({"$or": clauses})
 
 
 def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
@@ -800,7 +834,12 @@ def dashboard():
     skus = []
     for fi in sku_items:
         fid = fi["_id"]
-        total_lots = db.lots.count_documents({"food_item_id": fid})
+        total_lots = db.lots.count_documents(
+            {
+                "food_item_id": fid,
+                "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+            }
+        )
         skus.append(
             {
                 "food_item_id": fid,
@@ -827,7 +866,11 @@ def dashboard():
     if not fi_by_id:
         lots_for_inv = []
     else:
-        lots_for_inv = list(db.lots.find({"food_item_id": {"$in": list(fi_by_id.keys())}}))
+        _lot_store_filter = {
+            "food_item_id": {"$in": list(fi_by_id.keys())},
+            "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+        }
+        lots_for_inv = list(db.lots.find(_lot_store_filter))
 
     def _exp_sort_key(lot):
         ex = lot.get("expires_at")
@@ -907,7 +950,12 @@ def dashboard():
     for f in fis_store:
         d = (f.get("department") or "").strip() or "Uncategorized"
         dept_skus[d].add(f["_id"])
-    for lot in db.lots.find({"food_item_id": {"$in": list(fi_dept.keys())}}):
+    for lot in db.lots.find(
+        {
+            "food_item_id": {"$in": list(fi_dept.keys())},
+            "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+        }
+    ):
         d = fi_dept.get(lot["food_item_id"], "Uncategorized")
         dept_batches[d] += 1
     department_batch_summary = [
@@ -921,7 +969,12 @@ def dashboard():
     fi_ids_nav = [f["_id"] for f in db.food_items.find({"store_id": store_id}, {"_id": 1})]
     lots = []
     if fi_ids_nav:
-        for l in db.lots.find({"food_item_id": {"$in": fi_ids_nav}}).sort("received_at", -1).limit(50):
+        for l in db.lots.find(
+            {
+                "food_item_id": {"$in": fi_ids_nav},
+                "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+            }
+        ).sort("received_at", -1).limit(50):
             fi = db.food_items.find_one({"_id": l["food_item_id"]})
             lots.append(
                 {
@@ -1019,7 +1072,7 @@ def create_lot():
         return redirect(url_for("dashboard", store_id=store_id))
 
     if not lot_code:
-        flash("Lot code is required (e.g. ST1-I4-B1-001).", "error")
+        flash("Lot code is required (e.g. ST1-I1-B1-334).", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
     now = datetime.datetime.now().replace(microsecond=0)

@@ -255,7 +255,7 @@ def main() -> None:
     print(f"{product_name}, {ripeness_score}, {product_code or 'UNKNOWN'}")
 
     # POST JSON (flag must be first key). ``product_code`` must match a banana lot ``lot_code`` / ``lot_id``
-    # (e.g. ST1-4-B1-001) so the server can merge telemetry and update that batch in MongoDB.
+    # (e.g. ST1-I1-B1-334; server also resolves ST1-11-B1-334 after OCR I→1) so telemetry merges into MongoDB.
     body = {"flag": 1, "product_code": product_code, "ripeness_score": ripeness_score}
     try:
         response = requests.post(RECEIVE_DATA_URL, json=body, timeout=30)
