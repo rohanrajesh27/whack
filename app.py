@@ -96,7 +96,11 @@ def merge_camera_and_telemetry_to_batch(camera: dict, telemetry: dict) -> dict:
     s = {k: v for k, v in telemetry.items() if k != "flag"}
 
     lot_id = s.get("lot_id") or s.get("lot_code") or c.get("lot_id") or c.get("lot_code") or c.get("product_code")
-    product_code = c.get("product_code") or s.get("product_code")
+    product_code = c.get("product_code") or s.get("product_code") or lot_id
+    if lot_id is None and product_code:
+        lot_id = product_code
+    if product_code is None and lot_id:
+        product_code = lot_id
 
     ripeness = _coalesce_int(
         s.get("ripeness"),
@@ -157,6 +161,7 @@ def logs():
                     "kind": "batch",
                     "ts": entry.get("ts"),
                     "batch": payload["batch"],
+                    "lot_update": entry.get("lot_update"),
                 }
             )
             continue
@@ -215,20 +220,28 @@ def receive_data():
     if first_key == "flag" and first_val == 0:
         # Only the first flag=0 after a flag=1 is logged (one merged row). Orphan flag=0 posts are ignored.
         merged_ok = False
+        lot_status: Optional[str] = None
         try:
             db = get_mongo_db()
             pend = db["ingest_pending"].find_one({"_id": INGEST_PENDING_DOC_ID})
             if pend and isinstance(pend.get("payload"), dict):
                 coll = db["logs"]
                 batch = merge_camera_and_telemetry_to_batch(dict(pend["payload"]), dict(data))
-                coll.insert_one({"ts": now_ts(), "payload": {"batch": batch}})
+                batch, lot_status = apply_batch_merge_to_lot(db, batch)
+                coll.insert_one(
+                    {"ts": now_ts(), "payload": {"batch": batch}, "lot_update": lot_status}
+                )
                 _trim_logs_collection(coll)
                 db["ingest_pending"].delete_one({"_id": INGEST_PENDING_DOC_ID})
                 merged_ok = True
         except Exception:
             pass
         if merged_ok:
-            return jsonify(status="success", message="Logged merged batch payload."), 200
+            return jsonify(
+                status="success",
+                message="Logged batch and updated lot if matched.",
+                lot_update=lot_status,
+            ), 200
         return jsonify(status="success", message="No pending camera capture; telemetry not logged."), 200
 
     # Legacy: pinger-style payloads (weight + message)
@@ -333,6 +346,117 @@ def parse_storage_datetime(value):
         return datetime.datetime.fromisoformat(s.replace(" ", "T"))
     except ValueError:
         return None
+
+
+# Ripeness 1 = very fresh (no markdown), 5 = end of life (heavier markdown). Drives shelf ``days_left`` when absent.
+_DISCOUNT_PCT_BY_RIPENESS: dict[int, float] = {1: 0.0, 2: 10.0, 3: 22.0, 4: 35.0, 5: 48.0}
+_DAYSLEFT_BY_RIPENESS: dict[int, int] = {1: 7, 2: 5, 3: 4, 4: 2, 5: 0}
+
+
+def _find_lot_by_batch_key(db, key: str):
+    if not key or not str(key).strip():
+        return None
+    k = str(key).strip()
+    return db.lots.find_one({"$or": [{"lot_code": k}, {"lot_id": k}]})
+
+
+def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
+    """If ``lot_id`` / ``product_code`` matches a banana lot, enrich + ``$set`` batch fields (never ``type``)."""
+    key = (batch.get("lot_id") or batch.get("product_code") or "").strip()
+    if not key:
+        out = dict(batch)
+        out["lot_match"] = False
+        return out, "missing_batch_key"
+
+    lot = _find_lot_by_batch_key(db, key)
+    if lot is None:
+        out = dict(batch)
+        out["lot_match"] = False
+        return out, "lot_not_found"
+
+    fi = db.food_items.find_one({"_id": lot["food_item_id"]})
+    if fi is None or "banana" not in (fi.get("name") or "").lower():
+        out = dict(batch)
+        out["lot_match"] = False
+        return out, "not_banana_sku"
+
+    r_raw = batch.get("ripeness")
+    if r_raw is None:
+        r = 3
+    else:
+        try:
+            r = int(round(float(r_raw)))
+        except (TypeError, ValueError):
+            r = 3
+        r = max(1, min(5, r))
+
+    discount_pct = float(_DISCOUNT_PCT_BY_RIPENESS.get(r, 22.0))
+    dl = batch.get("days_left")
+    if dl is None:
+        days_left = int(_DAYSLEFT_BY_RIPENESS.get(r, 4))
+    else:
+        try:
+            days_left = max(0, int(dl))
+        except (TypeError, ValueError):
+            days_left = int(_DAYSLEFT_BY_RIPENESS.get(r, 4))
+
+    base_price = float(fi.get("price") or 0.0)
+    pr = db.pricing_rules.find_one({"food_item_id": fi["_id"]})
+    rec = round(base_price * (1.0 - discount_pct / 100.0), 2)
+    if pr is not None:
+        mn, mx = pr.get("min_price"), pr.get("max_price")
+        if mn is not None and rec < float(mn):
+            rec = float(mn)
+        if mx is not None and rec > float(mx):
+            rec = float(mx)
+
+    now = datetime.datetime.now().replace(microsecond=0)
+    exp_dt = now + datetime.timedelta(days=days_left)
+
+    out = dict(batch)
+    out["lot_id"] = key
+    out["product_code"] = key
+    out["ripeness"] = r
+    out["discount_pct"] = round(discount_pct, 2)
+    out["recommended_price"] = rec
+    out["days_left"] = days_left
+    out["expiration"] = exp_dt.isoformat(sep=" ")
+    out["lot_match"] = True
+
+    set_doc: dict = {
+        "recommended_price": rec,
+        "discount_pct": round(discount_pct, 2),
+        "ripeness": r,
+        "days_left": days_left,
+        "expiration": exp_dt,
+        "expires_at": exp_dt,
+        "lot_id": key,
+        "lot_code": key,
+    }
+    for fld in ("weight_grams", "temperature_c", "humidity_pct"):
+        v = out.get(fld)
+        if v is not None:
+            set_doc[fld] = v
+    db.lots.update_one({"_id": lot["_id"]}, {"$set": set_doc})
+
+    wg = out.get("weight_grams")
+    tc = out.get("temperature_c")
+    hp = out.get("humidity_pct")
+    if wg is not None or tc is not None or hp is not None:
+        db.sensor_readings.insert_one(
+            {
+                "_id": alloc_id("sensor_readings"),
+                "lot_id": lot["_id"],
+                "weight_g": wg,
+                "temp_c": tc,
+                "humidity_rh": hp,
+                "voc_ppb": 0,
+                "recorded_at": now,
+                "created_at": now_ts(),
+            }
+        )
+
+    return out, "lot_updated"
 
 
 def format_datetime_for_store_users(value):

@@ -28,7 +28,8 @@ def init_mongo() -> None:
     ``lots`` = **batches**. Canonical batch fields (see ``demo_seed`` module docstring):
 
     ``type``, ``weight_grams``, ``temperature_c``, ``humidity_pct``,
-    ``recommended_price``, ``ripeness``, ``expiration``, ``days_left``, ``lot_id``
+    ``recommended_price``, ``discount_pct`` (markdown from ripeness), ``ripeness``,
+    ``expiration``, ``days_left``, ``lot_id``
 
     plus ``food_item_id``, ``lot_code``, ``received_at``, ``expires_at`` (mirror of
     ``expiration`` where used), ``created_at``, optional ``quantity_label`` / ``notes``.

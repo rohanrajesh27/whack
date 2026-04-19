@@ -21,6 +21,8 @@ from mongo_db import get_mongo_db
 
 BANANA_PRODUCT: tuple[str, str, str, float] = ("Bananas", "Organic bunches", "Produce", 0.79)
 
+_DISCOUNT_PCT_BY_RIPENESS: dict[int, float] = {1: 0.0, 2: 10.0, 3: 22.0, 4: 35.0, 5: 48.0}
+
 
 def _barcode(item_id: int) -> str:
     return str(10_000_000_000 + int(item_id))
@@ -61,7 +63,7 @@ def _insert_lot_with_batch_schema(
     weight_grams: float,
     temperature_c: float,
     humidity_pct: float,
-    recommended_price: float,
+    base_price: float,
     ripeness: int,
     expiration: dt.datetime,
     received_at: dt.datetime,
@@ -69,21 +71,24 @@ def _insert_lot_with_batch_schema(
     days_left = max(0, (expiration.date() - now.date()).days)
     label = _batch_label(store_id, food_item_id, batch_index, suffix_three)
     lot_pk = alloc_id("lots")
+    disc = float(_DISCOUNT_PCT_BY_RIPENESS.get(int(ripeness), 22.0))
+    recommended_price = round(float(base_price) * (1.0 - disc / 100.0), 2)
     db.lots.insert_one(
         {
             "_id": lot_pk,
             "food_item_id": food_item_id,
             "lot_code": label,
             "lot_id": label,
-            "type": "Produce",
+            "type": "Banana",
             "weight_grams": weight_grams,
             "temperature_c": temperature_c,
             "humidity_pct": humidity_pct,
-            "recommended_price": round(float(recommended_price), 2),
+            "recommended_price": recommended_price,
             "ripeness": int(ripeness),
-            "expiration": expiration,
-            "expires_at": expiration,
-            "days_left": int(days_left),
+            "discount_pct": round(disc, 2),
+        "expiration": expiration,
+        "expires_at": expiration,
+        "days_left": int(days_left),
             "received_at": received_at,
             "quantity_label": f"Banana batch {batch_index}",
             "notes": None,
@@ -125,13 +130,13 @@ def _seed_banana_batches_for_store(db, store_id: int) -> None:
         }
     )
 
-    # Three batches: different ripeness / weight / expiry (no filler SKUs).
+    # Three banana batches: ST#-I#-B#-### labels, varied ripeness / telemetry.
     specs = [
-        (1, 1, 980.0, 4.0, 54.0, round(price * 0.98, 2), 2, now + dt.timedelta(days=5), now - dt.timedelta(hours=20)),
-        (2, 2, 1020.0, 3.6, 56.0, round(price * 0.95, 2), 3, now + dt.timedelta(days=3), now - dt.timedelta(hours=14)),
-        (3, 3, 890.0, 5.1, 48.0, round(price * 0.88, 2), 4, now + dt.timedelta(days=1), now - dt.timedelta(hours=8)),
+        (1, 1, 980.0, 4.0, 54.0, 2, now + dt.timedelta(days=5), now - dt.timedelta(hours=20)),
+        (2, 2, 1020.0, 3.6, 56.0, 3, now + dt.timedelta(days=3), now - dt.timedelta(hours=14)),
+        (3, 3, 890.0, 5.1, 48.0, 4, now + dt.timedelta(days=1), now - dt.timedelta(hours=8)),
     ]
-    for batch_index, suffix_three, w, t, h, rec, rip, exp, recv in specs:
+    for batch_index, suffix_three, w, t, h, rip, exp, recv in specs:
         _insert_lot_with_batch_schema(
             db,
             store_id=store_id,
@@ -142,7 +147,7 @@ def _seed_banana_batches_for_store(db, store_id: int) -> None:
             weight_grams=w,
             temperature_c=t,
             humidity_pct=h,
-            recommended_price=rec,
+            base_price=float(price),
             ripeness=rip,
             expiration=exp,
             received_at=recv,
