@@ -143,6 +143,33 @@ def merge_camera_and_telemetry_to_batch(camera: dict, telemetry: dict) -> dict:
     }
 
 
+# Keys persisted on ``/logs`` for merged ingest (no ``discount_pct``, ``lot_match``, etc.).
+BATCH_LOG_KEYS: tuple[str, ...] = (
+    "store_id",
+    "lot_id",
+    "product_code",
+    "type",
+    "weight_grams",
+    "temperature_c",
+    "humidity_pct",
+    "recommended_price",
+    "ripeness",
+    "expiration",
+    "days_left",
+)
+
+
+def sanitize_batch_for_log(batch: dict) -> dict:
+    """Keep only canonical batch fields for log storage / display."""
+    out: dict = {}
+    for k in BATCH_LOG_KEYS:
+        v = batch.get(k)
+        if isinstance(v, datetime.datetime):
+            v = v.replace(microsecond=0).isoformat(sep=" ")
+        out[k] = v
+    return out
+
+
 @app.route("/logs")
 def logs():
     """Show merged camera + telemetry rows (newest pairs last in chronological list)."""
@@ -160,7 +187,7 @@ def logs():
                 {
                     "kind": "batch",
                     "ts": entry.get("ts"),
-                    "batch": payload["batch"],
+                    "batch": sanitize_batch_for_log(payload["batch"]),
                     "lot_update": entry.get("lot_update"),
                 }
             )
@@ -229,7 +256,11 @@ def receive_data():
                 batch = merge_camera_and_telemetry_to_batch(dict(pend["payload"]), dict(data))
                 batch, lot_status = apply_batch_merge_to_lot(db, batch)
                 coll.insert_one(
-                    {"ts": now_ts(), "payload": {"batch": batch}, "lot_update": lot_status}
+                    {
+                        "ts": now_ts(),
+                        "payload": {"batch": sanitize_batch_for_log(batch)},
+                        "lot_update": lot_status,
+                    }
                 )
                 _trim_logs_collection(coll)
                 db["ingest_pending"].delete_one({"_id": INGEST_PENDING_DOC_ID})
@@ -422,6 +453,9 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     out["days_left"] = days_left
     out["expiration"] = exp_dt.isoformat(sep=" ")
     out["lot_match"] = True
+    sid = fi.get("store_id")
+    if sid is not None:
+        out["store_id"] = int(sid)
 
     set_doc: dict = {
         "recommended_price": rec,
@@ -433,6 +467,8 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
         "lot_id": key,
         "lot_code": key,
     }
+    if sid is not None:
+        set_doc["store_id"] = int(sid)
     for fld in ("weight_grams", "temperature_c", "humidity_pct"):
         v = out.get(fld)
         if v is not None:
@@ -992,11 +1028,18 @@ def create_lot():
         days_left = max(0, (expiration.date() - now.date()).days)
 
     db = get_mongo_db()
+    fi = db.food_items.find_one({"_id": food_item_id})
+    if fi is None:
+        flash("Selected item was not found.", "error")
+        return redirect(url_for("dashboard", store_id=store_id))
+    lot_store_id = int(fi.get("store_id") or store_id)
+
     lot_id = alloc_id("lots")
     try:
         db.lots.insert_one(
             {
                 "_id": lot_id,
+                "store_id": lot_store_id,
                 "food_item_id": food_item_id,
                 "lot_code": lot_code,
                 "lot_id": lot_id_label,

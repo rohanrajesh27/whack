@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reset MongoDB business data: one sample store, one banana SKU, three batches (ST#-I#-B#-###)."""
+"""Reset MongoDB business data: store _id=1, banana SKU _id=1, three lots ST1-I1-B#-###."""
 
 import os
 import sys

@@ -4,7 +4,7 @@
   <main class="card" style="margin: 2rem auto; max-width: 820px;">
     <h1>Ingest log</h1>
     <p>
-      After a camera <code>flag: 1</code>, the <em>first</em> <code>flag: 0</code> telemetry POST is merged into <strong>one batch object</strong> (<code>lot_id</code>, <code>product_code</code>, <code>type</code>, <code>weight_grams</code>, <code>temperature_c</code>, <code>humidity_pct</code>, <code>recommended_price</code>, <code>ripeness</code>, <code>expiration</code>, <code>days_left</code>). Later <code>flag: 0</code> posts are ignored until the next camera capture.
+      After a camera <code>flag: 1</code>, the <em>first</em> <code>flag: 0</code> telemetry POST is merged into <strong>one batch object</strong> with only: <code>store_id</code>, <code>lot_id</code>, <code>product_code</code> (same as lot id), <code>type</code>, <code>weight_grams</code>, <code>temperature_c</code>, <code>humidity_pct</code>, <code>recommended_price</code>, <code>ripeness</code>, <code>expiration</code>, <code>days_left</code>. Later <code>flag: 0</code> posts are ignored until the next camera capture.
     </p>
     {% if not logs %}
       <p style="margin-top: 1rem; color: var(--muted);">No log entries yet.</p>

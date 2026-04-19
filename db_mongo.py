@@ -40,6 +40,7 @@ def init_mongo() -> None:
     db.food_items.create_index("store_id")
     db.food_items.create_index([("store_id", ASCENDING), ("department", ASCENDING)])
     db.lots.create_index("food_item_id")
+    db.lots.create_index("store_id")
     db.lots.create_index([("food_item_id", ASCENDING), ("lot_code", ASCENDING)], unique=True)
     db.lots.create_index(
         "lot_id",
