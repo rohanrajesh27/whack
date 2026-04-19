@@ -40,7 +40,7 @@ HUMIDITY_PCT = 60.0                  # current relative humidity
 #        e.g. 0.7 means a 4-day-old banana is scored like a 2.8-day-old one
 # >1.0 = LOOKS WORSE than its age suggests (treat as older banana)
 #        e.g. 1.3 means a 4-day-old banana is scored like a 5.2-day-old one
-VISUAL_AGE_MULTIPLIER = 1.3
+VISUAL_AGE_MULTIPLIER = 1.0
 
 # --- Per-store calibration (change once per store, then leave alone)
 DISTRIBUTOR_COST_PER_UNIT = 0.18     # what the store paid per banana
