@@ -226,6 +226,28 @@ def logs():
             )
     return render_template("logs.html", logs=results)
 
+@app.route("/receive-data/banana-display", methods=["GET"])
+def receive_data_banana_display():
+    """Poll shelf price for an LCD after a camera capture (no POST body required)."""
+    lot_code = _normalize_lot_label(request.args.get("lot_code") or request.args.get("product_code") or "")
+    if not lot_code:
+        return jsonify(status="error", message="Query lot_code or product_code is required."), 400
+    try:
+        db = get_mongo_db()
+        lot = _find_lot_by_batch_key(db, lot_code)
+        if lot is None:
+            return jsonify(status="error", message="Lot not found."), 404
+        fi = db.food_items.find_one({"_id": lot["food_item_id"]})
+        if fi is None:
+            return jsonify(status="error", message="Food item not found."), 404
+        lcd = _esp32_banana_lcd_payload(db, lot, fi)
+        if not lcd:
+            return jsonify(status="error", message="Not a banana lot or pricing unavailable."), 422
+        return jsonify(status="success", lot_code=lot_code, **lcd), 200
+    except Exception as e:
+        return jsonify(status="error", message=str(e)), 500
+
+
 @app.route('/receive-data', methods=['POST'])
 def receive_data():
     if not request.is_json:
@@ -246,6 +268,8 @@ def receive_data():
             )
         except Exception:
             pass
+        lot_hit = None
+        fi0 = None
         try:
             cam = dict(data)
             key = _normalize_lot_label(
@@ -257,8 +281,24 @@ def receive_data():
                     fi0 = db.food_items.find_one({"_id": lot_hit["food_item_id"]})
                     if fi0 is not None and _food_item_is_banana(fi0):
                         _snapshot_camera_onto_lot(db, lot_hit, cam)
+                        lot_hit = db.lots.find_one({"_id": lot_hit["_id"]})
         except Exception:
             pass
+        wants_json = (
+            request.args.get("format") == "json"
+            or request.accept_mimetypes.best_match(["application/json", "text/html"])
+            == "application/json"
+        )
+        if wants_json:
+            body: dict = {
+                "status": "success",
+                "message": "Camera capture stored; pending merge with next flag=0.",
+            }
+            if lot_hit is not None and fi0 is not None and _food_item_is_banana(fi0):
+                lcd = _esp32_banana_lcd_payload(db, lot_hit, fi0)
+                if lcd:
+                    body.update(lcd)
+            return jsonify(body), 200
         return render_template("receive_data_display.html", payload=data)
 
     if first_key == "flag" and first_val == 0:
@@ -832,8 +872,9 @@ def _esp32_banana_lcd_payload(db, lot: dict, fi: dict) -> Optional[dict]:
 
         fresh = float(pr_res.freshness_score)
         rip_lbl = rip_use if rip_use is not None else "-"
-        line1 = _lcd16(f"${recommended_price:.2f}  F:{fresh:.0f}")
-        line2 = _lcd16(f"R:{rip_lbl} T:{tc0:.0f}C H:{hp0:.0f}%")
+        # Line 1 = shelf price only (LCD1602 contract / ESP32 firmware).
+        line1 = _lcd16(f"${recommended_price:.2f}")
+        line2 = _lcd16(f"F:{fresh:.0f} R:{rip_lbl} {cw:.0f}g")
         return {
             "display_line_1": line1,
             "display_line_2": line2,

@@ -18,7 +18,14 @@ from ripeness import classify_ripeness
 
 load_dotenv()
 
-RECEIVE_DATA_URL = "https://whack-wlr9.onrender.com/receive-data"
+RECEIVE_DATA_URL = os.environ.get(
+    "RECEIVE_DATA_URL",
+    "https://whack-wlr9.onrender.com/receive-data",
+)
+# ``format=json`` forces JSON (with ``display_line_1`` = shelf price) even if ``Accept`` is ``*/*``.
+def _receive_data_post_url() -> str:
+    base = RECEIVE_DATA_URL.rstrip("/")
+    return f"{base}?format=json" if "?" not in base else f"{base}&format=json"
 
 # ── Model setup (loaded once at startup) ────────────────────────────────────
 
@@ -261,7 +268,12 @@ def main() -> None:
         "caption": (caption or "")[:400],
     }
     try:
-        response = requests.post(RECEIVE_DATA_URL, json=body, timeout=30)
+        response = requests.post(
+            _receive_data_post_url(),
+            json=body,
+            timeout=30,
+            headers={"Accept": "application/json"},
+        )
         if response.status_code == 200:
             print("Server acknowledged (200).")
             ct = (response.headers.get("Content-Type") or "").lower()
