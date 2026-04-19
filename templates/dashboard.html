@@ -169,12 +169,22 @@
               <div class="table table--inventory">
             <div class="table__row table__row--head">
               <div>Product</div>
-              <div>Type</div>
-              <div>Lot</div>
+              <div>Dept</div>
+              <div>Batch kind</div>
+              <div>Lot code</div>
+              <div>Qty label</div>
+              <div>Received</div>
               <div>Expires</div>
-              <div>Days left</div>
-              <div>Latest weight</div>
-              <div>Recommendation</div>
+              <div>Days</div>
+              <div title="Ripeness 1 (fresh)–5 (EOL)">Ripen</div>
+              <div title="Temperature °C">°C</div>
+              <div title="Relative humidity %">RH%</div>
+              <div title="Weight (latest)">Wt g</div>
+              <div title="SKU base price">Base $</div>
+              <div title="Batch markdown %">Disc %</div>
+              <div title="Min–max price guardrails">Floor–cap</div>
+              <div>Notes</div>
+              <div>Pricing</div>
             </div>
 
             {% if inventory_rows|length == 0 %}
@@ -188,8 +198,16 @@
               <div class="table__row">
                 <div class="mono" title="{{ r.item_name }}">{{ r.item_name_short }}</div>
                 <div>{{ r.department if r.department else "—" }}</div>
+                <div class="mono" title="{{ r.batch_type }}">{{ r.batch_type }}</div>
+                <div class="mono" title="{{ r.lot_code }}">{{ r.lot_code }}</div>
+                <div class="mono" title="{{ r.quantity_label }}">{{ r.quantity_label }}</div>
+
                 <div class="mono">
-                  {{ r.lot_code }}
+                  {% if r.received_at_human %}
+                    {{ r.received_at_human }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
                 </div>
 
                 <div class="mono">
@@ -209,10 +227,66 @@
                 </div>
 
                 <div class="mono">
+                  {% if r.ripeness is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ r.ripeness }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.temperature_c is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ "%.1f"|format(r.temperature_c) }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.humidity_pct is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ "%.0f"|format(r.humidity_pct) }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
                   {% if r.latest_weight_g is none %}
                     <span class="muted">—</span>
                   {% else %}
-                    {{ "%.0f"|format(r.latest_weight_g) }} g
+                    {{ "%.0f"|format(r.latest_weight_g) }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.base_price is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    ${{ "%.2f"|format(r.base_price) }}
+                  {% endif %}
+                </div>
+
+                <div class="mono">
+                  {% if r.discount_pct is none %}
+                    <span class="muted">—</span>
+                  {% else %}
+                    {{ "%.0f"|format(r.discount_pct) }}%
+                  {% endif %}
+                </div>
+
+                <div class="mono" title="{{ r.guardrails or '' }}">
+                  {% if r.guardrails %}
+                    {{ r.guardrails }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </div>
+
+                <div class="mono inv-notes" title="{{ r.notes or '' }}">
+                  {% if r.notes %}
+                    {{ r.notes }}
+                  {% else %}
+                    <span class="muted">—</span>
                   {% endif %}
                 </div>
 

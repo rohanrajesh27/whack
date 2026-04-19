@@ -385,9 +385,53 @@ _DISCOUNT_PCT_BY_RIPENESS: dict[int, float] = {1: 0.0, 2: 10.0, 3: 22.0, 4: 35.0
 _DAYSLEFT_BY_RIPENESS: dict[int, int] = {1: 7, 2: 5, 3: 4, 4: 2, 5: 0}
 
 
+def _normalize_lot_label(value) -> str:
+    """Strip whitespace and stray trailing commas from batch labels (bad paste / exports)."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    while s.endswith(","):
+        s = s[:-1].strip()
+    return s
+
+
+def _dedupe_lots_for_display(lots_list: list) -> list:
+    """Keep one row per (food_item_id, normalized lot label), preferring the newest by received_at then _id."""
+    buckets: dict[tuple[int, str], list] = defaultdict(list)
+    for lot in lots_list:
+        fid = int(lot["food_item_id"])
+        label = _normalize_lot_label(lot.get("lot_code") or lot.get("lot_id") or "")
+        key = (fid, label or f"_id:{lot['_id']}")
+        buckets[key].append(lot)
+
+    def _recv_ts(lx: dict) -> datetime.datetime:
+        r = lx.get("received_at")
+        if isinstance(r, datetime.datetime):
+            return r
+        if r is not None:
+            pd = parse_storage_datetime(r)
+            if pd is not None:
+                return pd
+        return datetime.datetime.min
+
+    out: list = []
+    for group in buckets.values():
+        if len(group) == 1:
+            out.append(group[0])
+            continue
+        out.append(
+            sorted(
+                group,
+                key=lambda lx: (_recv_ts(lx), int(lx["_id"])),
+                reverse=True,
+            )[0]
+        )
+    return out
+
+
 def _batch_code_lookup_clauses(key: str) -> list[dict]:
     """Build ``$or`` clauses so ``ST1-I1-…`` lots match OCR-normalised ``ST1-11-…`` (I→1) keys."""
-    k = str(key).strip()
+    k = _normalize_lot_label(key)
     if not k:
         return []
     clauses: list[dict] = []
@@ -422,12 +466,16 @@ def _find_lot_by_batch_key(db, key: str):
     clauses = _batch_code_lookup_clauses(key)
     if not clauses:
         return None
-    return db.lots.find_one({"$or": clauses})
+    lot = db.lots.find_one({"$or": clauses})
+    if lot is None and key:
+        pattern = re.compile(r"^\s*" + re.escape(key) + r",?\s*$", re.IGNORECASE)
+        lot = db.lots.find_one({"$or": [{"lot_code": pattern}, {"lot_id": pattern}]})
+    return lot
 
 
 def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     """If ``lot_id`` / ``product_code`` matches a banana lot, enrich + ``$set`` batch fields (never ``type``)."""
-    key = (batch.get("lot_id") or batch.get("product_code") or "").strip()
+    key = _normalize_lot_label(batch.get("lot_id") or batch.get("product_code") or "")
     if not key:
         out = dict(batch)
         out["lot_match"] = False
@@ -438,6 +486,12 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
         out = dict(batch)
         out["lot_match"] = False
         return out, "lot_not_found"
+
+    canonical = (
+        _normalize_lot_label(lot.get("lot_code"))
+        or _normalize_lot_label(lot.get("lot_id"))
+        or key
+    )
 
     fi = db.food_items.find_one({"_id": lot["food_item_id"]})
     if fi is None or "banana" not in (fi.get("name") or "").lower():
@@ -479,8 +533,8 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
     exp_dt = now + datetime.timedelta(days=days_left)
 
     out = dict(batch)
-    out["lot_id"] = key
-    out["product_code"] = key
+    out["lot_id"] = canonical
+    out["product_code"] = canonical
     out["ripeness"] = r
     out["discount_pct"] = round(discount_pct, 2)
     out["recommended_price"] = rec
@@ -498,8 +552,8 @@ def apply_batch_merge_to_lot(db, batch: dict) -> tuple[dict, str]:
         "days_left": days_left,
         "expiration": exp_dt,
         "expires_at": exp_dt,
-        "lot_id": key,
-        "lot_code": key,
+        "lot_id": canonical,
+        "lot_code": canonical,
     }
     if sid is not None:
         set_doc["store_id"] = int(sid)
@@ -834,12 +888,11 @@ def dashboard():
     skus = []
     for fi in sku_items:
         fid = fi["_id"]
-        total_lots = db.lots.count_documents(
-            {
-                "food_item_id": fid,
-                "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
-            }
-        )
+        _lq = {
+            "food_item_id": fid,
+            "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+        }
+        total_lots = len(_dedupe_lots_for_display(list(db.lots.find(_lq))))
         skus.append(
             {
                 "food_item_id": fid,
@@ -870,7 +923,7 @@ def dashboard():
             "food_item_id": {"$in": list(fi_by_id.keys())},
             "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
         }
-        lots_for_inv = list(db.lots.find(_lot_store_filter))
+        lots_for_inv = _dedupe_lots_for_display(list(db.lots.find(_lot_store_filter)))
 
     def _exp_sort_key(lot):
         ex = lot.get("expires_at")
@@ -898,6 +951,13 @@ def dashboard():
         latest_weight_g = lot.get("weight_grams")
         if latest_weight_g is None and sr:
             latest_weight_g = sr.get("weight_g")
+        temp_c = lot.get("temperature_c")
+        humidity_rh = lot.get("humidity_pct")
+        if sr:
+            if temp_c is None:
+                temp_c = sr.get("temp_c")
+            if humidity_rh is None:
+                humidity_rh = sr.get("humidity_rh")
 
         expires_at = lot.get("expires_at") or lot.get("expiration")
         days_left = lot.get("days_left")
@@ -921,22 +981,38 @@ def dashboard():
                 recommended_price = max_price
                 rec["label"] = f"{rec['label']} (capped)"
 
+        lot_label = _normalize_lot_label(lot.get("lot_code") or lot.get("lot_id") or "") or f"#{lot['_id']}"
+        guardrails = None
+        if min_price is not None or max_price is not None:
+            lo = f"${float(min_price):.2f}" if min_price is not None else "—"
+            hi = f"${float(max_price):.2f}" if max_price is not None else "—"
+            guardrails = f"{lo} – {hi}"
+
         inventory_rows.append(
             {
                 "lot_id": lot["_id"],
-                "lot_code": lot.get("lot_code") or f"#{lot['_id']}",
+                "lot_code": lot_label,
+                "batch_type": (lot.get("type") or "").strip() or "—",
+                "quantity_label": (lot.get("quantity_label") or "").strip() or "—",
+                "notes": (lot.get("notes") or "").strip() or None,
                 "item_name": fi.get("name"),
                 "item_name_short": abbreviate_product_name(fi.get("name"), 22),
                 "department": fi.get("department"),
+                "base_price": fi.get("price"),
                 "received_at_human": format_datetime_for_store_users(lot.get("received_at")),
                 "expires_at_human": format_date_for_store_users(lot.get("expires_at") or lot.get("expiration")),
                 "days_left": days_left,
+                "ripeness": lot.get("ripeness"),
+                "discount_pct": lot.get("discount_pct"),
+                "temperature_c": temp_c,
+                "humidity_pct": humidity_rh,
                 "latest_weight_g": latest_weight_g,
                 "rec_status": rec["status"],
                 "rec_label": rec["label"],
                 "recommended_price": recommended_price,
                 "min_price": min_price,
                 "max_price": max_price,
+                "guardrails": guardrails,
             }
         )
 
@@ -950,12 +1026,15 @@ def dashboard():
     for f in fis_store:
         d = (f.get("department") or "").strip() or "Uncategorized"
         dept_skus[d].add(f["_id"])
-    for lot in db.lots.find(
-        {
-            "food_item_id": {"$in": list(fi_dept.keys())},
-            "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
-        }
-    ):
+    dept_lots_raw = list(
+        db.lots.find(
+            {
+                "food_item_id": {"$in": list(fi_dept.keys())},
+                "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+            }
+        )
+    )
+    for lot in _dedupe_lots_for_display(dept_lots_raw):
         d = fi_dept.get(lot["food_item_id"], "Uncategorized")
         dept_batches[d] += 1
     department_batch_summary = [
@@ -969,18 +1048,23 @@ def dashboard():
     fi_ids_nav = [f["_id"] for f in db.food_items.find({"store_id": store_id}, {"_id": 1})]
     lots = []
     if fi_ids_nav:
-        for l in db.lots.find(
-            {
-                "food_item_id": {"$in": fi_ids_nav},
-                "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
-            }
-        ).sort("received_at", -1).limit(50):
+        nav_lots = list(
+            db.lots.find(
+                {
+                    "food_item_id": {"$in": fi_ids_nav},
+                    "$or": [{"store_id": store_id}, {"store_id": {"$exists": False}}],
+                }
+            ).sort("received_at", -1)
+        )
+        nav_lots = _dedupe_lots_for_display(nav_lots)[:50]
+        for l in nav_lots:
             fi = db.food_items.find_one({"_id": l["food_item_id"]})
             lots.append(
                 {
                     "id": l["_id"],
                     "item_name": fi["name"] if fi else "?",
-                    "lot_code": l.get("lot_code"),
+                    "lot_code": _normalize_lot_label(l.get("lot_code") or l.get("lot_id") or "")
+                    or f"#{l['_id']}",
                     "received_at": l.get("received_at"),
                     "received_at_human": format_datetime_for_store_users(l.get("received_at")),
                 }
@@ -1051,8 +1135,8 @@ def create_item():
 def create_lot():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     food_item_id = request.form.get("food_item_id", type=int)
-    lot_code = (request.form.get("lot_code") or "").strip()
-    lot_id_label = (request.form.get("lot_id") or "").strip() or lot_code
+    lot_code = _normalize_lot_label(request.form.get("lot_code") or "")
+    lot_id_label = _normalize_lot_label(request.form.get("lot_id") or "") or lot_code
     received_at = parse_optional_datetime_local(request.form.get("received_at")) or datetime.datetime.now().replace(microsecond=0)
     expires_at = parse_optional_datetime_local(request.form.get("expires_at"))
     expiration = parse_optional_datetime_local(request.form.get("expiration")) or expires_at
