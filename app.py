@@ -37,7 +37,7 @@ def _with_id(doc):
         d["id"] = d.pop("_id")
     return d
 
-@app.route("logs")
+@app.route("/logs")
 def logs():
     # Show a simple page listing recent POST payloads where the first key is 'flag' and value is 1.
     db = get_mongo_db()
