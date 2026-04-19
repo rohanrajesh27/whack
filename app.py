@@ -37,6 +37,27 @@ def _with_id(doc):
         d["id"] = d.pop("_id")
     return d
 
+@app.route("logs")
+def logs():
+    # Show a simple page listing recent POST payloads where the first key is 'flag' and value is 1.
+    db = get_mongo_db()
+    logs_collection = db["logs"]
+
+    # Find recent entries where the POST body (stored as 'payload') is a dict and its first key/value are 'flag':1
+    entries = logs_collection.find().sort("ts", -1).limit(100)
+    results = []
+    for entry in entries:
+        payload = entry.get("payload")
+        if isinstance(payload, dict) and payload:
+            first_key, first_val = next(iter(payload.items()))
+            if first_key == 'flag' and first_val == 1:
+                results.append({
+                    "payload": payload,
+                    "ts": entry.get("ts"),
+                })
+    # Render logs.html, expecting it to show .payload and .ts
+    return render_template("logs.html", logs=results)
+
 @app.route('/receive-data', methods=['POST'])
 def receive_data():
     if not request.is_json:

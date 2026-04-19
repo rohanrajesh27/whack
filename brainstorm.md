@@ -85,7 +85,7 @@ Every price shown has to work inside SNAP rules and alongside DCCK's SNAP Match 
 
 - **Timekeeping.** ESP32 Wi-Fi/NTP for timestamps. RTC module only if Wi-Fi is unavailable at the demo site.
 - **Item identification.** QR/barcode scan (phone camera) or a simple physical button on the device to register "new lot, day zero." Low friction for the owner.
-- **Data logging.** Wi-Fi upload to a lightweight backend (Firebase or a local Flask endpoint) for the dashboard demo. MicroSD as fallback.
+- **Data logging.** Wi-Fi upload to our Flask backend (demo hosted on Render; MongoDB for persistence) for the dashboard. MicroSD as fallback where Wi-Fi is unreliable.
 
 **Minimum viable hardware MVP (what we actually demo)**
 
@@ -177,6 +177,27 @@ Improve access to affordable fresh food through better distribution and partners
 | Serve both store owners and residents | Owner gets risk reduction and time savings; resident gets visible fairness and a lower price as freshness declines |
 | Consider sustainability, scalability, equity | Low hardware cost, Wi-Fi enabled for fleet scaling, SNAP/SNAP Match compatible by design |
 | Solution could be technology platform, service design, policy framework, community engagement, or a combination | We combine a hardware/software platform with a policy-aware pricing framework (affordability ceiling, anti-gouging floor) |
+
+---
+
+## Why this project is open source
+
+**Mission fit.** Corner-store affordability and SNAP-related pricing depend on trust. Open code makes it clear how freshness signals become a price (rules, floors, ceilings) without hidden logic inside a vendor black box.
+
+**The stack is built from open components, not proprietary vision APIs.** That keeps per-store and per-demo cost low and avoids tying the product to a paid cloud OCR or “AI label” contract.
+
+| Layer | What we use | Why it matters for OSS |
+|--------|----------------|-------------------------|
+| **Web app & API** | [Flask](https://flask.palletsprojects.com/) (BSD-3-Clause) | Small footprint, easy for others to run locally or fork for their own Healthy Corners–style pilots. |
+| **Data store** | [MongoDB](https://www.mongodb.com/) via [PyMongo](https://github.com/mongodb/mongo-python-driver) (Apache-2.0 driver) | Document model fits inventory and sensor logs; teams can use Community Edition, Atlas, or another host without buying our stack. |
+| **Camera / produce understanding** | [OpenCV](https://opencv.org/) (Apache-2.0), [PyTorch](https://pytorch.org/) + [torchvision](https://github.com/pytorch/vision) (BSD), [Hugging Face Transformers](https://github.com/huggingface/transformers) (Apache-2.0) | Capture and inference run on open tooling; models are pulled from the Hugging Face Hub under each model’s license (e.g. BLIP captioning, DETR detection, ResNet-50 classification). |
+| **Label / code reading** | [Tesseract](https://github.com/tesseract-ocr/tesseract) (Apache-2.0) via `pytesseract` | OCR runs locally—no per-image billing from a third-party text API. |
+| **HTTP between pieces** | [requests](https://requests.readthedocs.io/) (Apache-2.0) for JSON POSTs (e.g. camera analysis → `/receive-data`) | Simple, inspectable integration; no SDK lock-in. |
+| **Hosting & collaboration** | [Render](https://render.com/) for public demo URLs, [GitHub](https://github.com/) for source | Standard student/startup paths; secrets stay in `.env`, not in the repo. |
+
+**What is not “open” in the sense of public-by-default.** Store data, Mongo connection strings, and any future API keys stay private per deployment. Open source here means **the implementation is inspectable and forkable**, not that production tenant data is world-readable.
+
+**Practical outcome.** A TA, NGO engineer, or another school team can clone the repo, install `requirements.txt`, point Tesseract and Mongo at their machine, and reproduce the dashboard and camera pipeline—aligned with GW’s emphasis on replicable urban food access prototypes.
 
 ---
 
