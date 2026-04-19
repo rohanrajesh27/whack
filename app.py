@@ -68,6 +68,77 @@ def _payload_flag_value(payload) -> Optional[int]:
     return int(first_val)
 
 
+def _coalesce_int(*vals: object) -> Optional[int]:
+    for v in vals:
+        if v is None or isinstance(v, bool):
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _coalesce_float(*vals: object) -> Optional[float]:
+    for v in vals:
+        if v is None or isinstance(v, bool):
+            continue
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def merge_camera_and_telemetry_to_batch(camera: dict, telemetry: dict) -> dict:
+    """Strip ``flag`` and build one batch-shaped dict (lot / shelf fields for DB or UI)."""
+    c = {k: v for k, v in camera.items() if k != "flag"}
+    s = {k: v for k, v in telemetry.items() if k != "flag"}
+
+    lot_id = s.get("lot_id") or s.get("lot_code") or c.get("lot_id") or c.get("lot_code") or c.get("product_code")
+    product_code = c.get("product_code") or s.get("product_code")
+
+    ripeness = _coalesce_int(
+        s.get("ripeness"),
+        c.get("ripeness_score"),
+        s.get("ripeness_score"),
+        c.get("ripeness"),
+    )
+
+    weight_grams = _coalesce_float(s.get("weight_grams"), s.get("weight_g"), c.get("weight_grams"), c.get("weight_g"))
+    temperature_c = _coalesce_float(s.get("temperature_c"), s.get("temp_c"), c.get("temperature_c"), c.get("temp_c"))
+    humidity_pct = _coalesce_float(
+        s.get("humidity_pct"), s.get("humidity_rh"), c.get("humidity_pct"), c.get("humidity_rh")
+    )
+    recommended_price = _coalesce_float(
+        s.get("recommended_price"),
+        s.get("recommended"),
+        c.get("recommended_price"),
+    )
+
+    batch_type = s.get("type") or s.get("product_type") or c.get("type")
+
+    expiration = s.get("expiration") or s.get("expires_at") or c.get("expiration") or c.get("expires_at")
+    days_left = _coalesce_int(s.get("days_left"), c.get("days_left"))
+    if days_left is None and expiration is not None:
+        exp_dt = expiration if isinstance(expiration, datetime.datetime) else parse_storage_datetime(str(expiration))
+        if exp_dt is not None:
+            days_left = max(0, (exp_dt.date() - datetime.datetime.now().date()).days)
+
+    return {
+        "lot_id": lot_id,
+        "product_code": product_code,
+        "type": batch_type,
+        "weight_grams": weight_grams,
+        "temperature_c": temperature_c,
+        "humidity_pct": humidity_pct,
+        "recommended_price": recommended_price,
+        "ripeness": ripeness,
+        "expiration": expiration,
+        "days_left": days_left,
+    }
+
+
 @app.route("/logs")
 def logs():
     """Show merged camera + telemetry rows (newest pairs last in chronological list)."""
@@ -79,6 +150,15 @@ def logs():
     for entry in entries:
         payload = entry.get("payload")
         if not isinstance(payload, dict):
+            continue
+        if "batch" in payload and isinstance(payload.get("batch"), dict):
+            results.append(
+                {
+                    "kind": "batch",
+                    "ts": entry.get("ts"),
+                    "batch": payload["batch"],
+                }
+            )
             continue
         if "camera" in payload and "sensor" in payload:
             results.append(
@@ -133,20 +213,23 @@ def receive_data():
         return render_template("receive_data_display.html", payload=data)
 
     if first_key == "flag" and first_val == 0:
+        # Only the first flag=0 after a flag=1 is logged (one merged row). Orphan flag=0 posts are ignored.
+        merged_ok = False
         try:
             db = get_mongo_db()
             pend = db["ingest_pending"].find_one({"_id": INGEST_PENDING_DOC_ID})
-            coll = db["logs"]
             if pend and isinstance(pend.get("payload"), dict):
-                merged = {"camera": dict(pend["payload"]), "sensor": dict(data)}
-                coll.insert_one({"ts": now_ts(), "payload": merged})
+                coll = db["logs"]
+                batch = merge_camera_and_telemetry_to_batch(dict(pend["payload"]), dict(data))
+                coll.insert_one({"ts": now_ts(), "payload": {"batch": batch}})
+                _trim_logs_collection(coll)
                 db["ingest_pending"].delete_one({"_id": INGEST_PENDING_DOC_ID})
-            else:
-                coll.insert_one({"ts": now_ts(), "payload": {"sensor": dict(data)}})
-            _trim_logs_collection(coll)
+                merged_ok = True
         except Exception:
             pass
-        return jsonify(status="success", message="Logged (telemetry merged if camera was pending)."), 200
+        if merged_ok:
+            return jsonify(status="success", message="Logged merged batch payload."), 200
+        return jsonify(status="success", message="No pending camera capture; telemetry not logged."), 200
 
     # Legacy: pinger-style payloads (weight + message)
     if 'weight' in data and 'message' in data:
