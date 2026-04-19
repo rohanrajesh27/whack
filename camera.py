@@ -4,19 +4,17 @@ import os
 import re
 import sys
 from typing import Any
-import numpy as np
 
 import cv2
+import numpy as np
 import pytesseract
 import torch
 from dotenv import load_dotenv
 from PIL import Image
-from transformers import (
-    pipeline,
-    BlipProcessor,
-    BlipForConditionalGeneration,
-)
+from transformers import pipeline
 from torchvision import models, transforms
+
+from ripeness import classify_ripeness
 
 load_dotenv()
 
@@ -43,16 +41,11 @@ GROCERY_COCO_LABELS: frozenset[str] = frozenset({
 
 # ── Model setup (loaded once at startup) ────────────────────────────────────
 
-# 1. Image captioning (BLIP)
-print("Loading captioning model (BLIP)...")
-blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-blip_model     = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
-
-# 2. Object detection (DETR)
+# Object detection (DETR)
 print("Loading object detection model (DETR)...")
 detector = pipeline("object-detection", model="facebook/detr-resnet-50")
 
-# 3. Image classification (ResNet-50 via torchvision)
+# Image classification (ResNet-50 via torchvision)
 print("Loading classification model (ResNet-50)...")
 resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
 resnet.eval()
@@ -104,15 +97,6 @@ def frame_to_pil(frame: Any) -> Image.Image:
 
 # ── Analysis functions ───────────────────────────────────────────────────────
 
-def generate_caption(image: Image.Image) -> str:
-    """Generate a grocery-focused caption and ripeness estimate using BLIP."""
-    prompt = "Describe the object in the image as a grocery product and name it specifically, including ripeness." 
-    inputs = blip_processor(images=image, text=prompt, return_tensors="pt")
-    with torch.no_grad():
-        out = blip_model.generate(**inputs, max_new_tokens=60)
-    return blip_processor.decode(out[0], skip_special_tokens=True)
-
-
 def detect_objects(image: Image.Image) -> list[dict]:
     """Detect objects and their bounding boxes using DETR."""
     return detector(image)
@@ -146,7 +130,7 @@ def infer_product_name(
     objects: list[dict],
     top_classes: list[tuple[str, float]],
 ) -> str:
-    """Infer a likely grocery product name from the caption, detected objects, and classification labels."""
+    """Infer a likely grocery product name from caption + detected objects + classifier labels."""
     caption_lower = caption.lower()
     grocery_items = [
         "banana",
@@ -184,52 +168,27 @@ def infer_product_name(
 
     return "Unknown product"
 
+
 def preprocess_for_ocr(image: Image.Image) -> Image.Image:
     """Clean up a phone photo before sending it to Tesseract."""
-    # PIL -> OpenCV array
     img = np.array(image)
     if img.ndim == 3:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    # 1. Grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # 2. Upscale — Tesseract likes text at least 30px tall
     gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-
-    # 3. Denoise (removes camera grain without softening edges too much)
     gray = cv2.fastNlMeansDenoising(gray, h=10)
-
-    # 4. Adaptive threshold — handles uneven lighting way better than a fixed threshold
     binary = cv2.adaptiveThreshold(
         gray, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY,
-        31,   # block size — try 21, 31, 41
-        10,   # constant subtracted from the mean
+        31,
+        10,
     )
-
-    # 5. Small morphological open to kill speckle
     kernel = np.ones((2, 2), np.uint8)
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
     return Image.fromarray(binary)
-
-
-def infer_ripeness_score(caption: str) -> int:
-    """Map a grocery caption to a ripeness score from 1 (unripe) to 5 (overripe)."""
-    text = caption.lower()
-    if any(word in text for word in ["overripe", "over-ripe", "mushy", "brown spots", "too ripe", "soft"]):
-        return 5
-    if any(word in text for word in ["very ripe", "ripe", "yellow", "soft", "ready to eat"]):
-        return 4
-    if any(word in text for word in ["ripe", "mature", "fresh", "ready"]):
-        return 3
-    if any(word in text for word in ["slightly unripe", "firm", "not ripe", "not yet ripe", "still green"]):
-        return 2
-    if any(word in text for word in ["unripe", "green", "hard", "immature", "raw"]):
-        return 1
-    return 3
 
 
 def extract_text(image: Image.Image) -> str:
@@ -248,6 +207,7 @@ PRODUCT_CODE_COMPACT = re.compile(r"([A-Z0-9]{3})([A-Z0-9]\d)([A-Z0-9]\d)(\d{3})
 
 
 def extract_product_code(raw_text: str) -> str | None:
+    """Find a code matching ***-*#-*#-###. Swaps I->1 first since Tesseract often misreads 1 as I."""
     normalised = raw_text.upper().replace("I", "1")
 
     m = PRODUCT_CODE_STRICT.search(normalised)
@@ -282,12 +242,10 @@ def format_analysis_report(
     lines.append("=" * 60)
     lines.append("  Single capture: vision models + Tesseract OCR on the same frame")
 
-    # ── Caption ──────────────────────────────────────────────────
     lines.append("\n[1] SCENE DESCRIPTION (BLIP captioning)")
     lines.append("-" * 40)
     lines.append(f"  {caption}")
 
-    # ── Classification ────────────────────────────────────────────
     lines.append("\n[2] TOP IMAGE CLASSIFICATIONS (ResNet-50 / ImageNet)")
     lines.append("-" * 40)
     for rank, (label, pct) in enumerate(top_classes, 1):
@@ -297,7 +255,6 @@ def format_analysis_report(
     lines.append("-" * 40)
     lines.append(f"  {ripeness} / 5")
 
-    # ── Object detection ──────────────────────────────────────────
     lines.append("\n[4] DETECTED OBJECTS (DETR)")
     lines.append("-" * 40)
     primary = best_grocery_detection(objects)
@@ -322,13 +279,11 @@ def format_analysis_report(
     else:
         lines.append("  No objects detected.")
 
-    # ── OCR ───────────────────────────────────────────────────────
     lines.append("\n[5] EXTRACTED TEXT (Tesseract OCR)")
     lines.append("-" * 40)
     cleaned = raw_text.strip()
     lines.append(cleaned if cleaned else "  (no text detected)")
 
-    # ── Product code ──────────────────────────────────────────────
     lines.append("\n[6] PRODUCT CODE  (format: ***-*#-*#-###; * = alnum, # = digit)")
     lines.append("-" * 40)
     if product_code:
@@ -343,19 +298,20 @@ def format_analysis_report(
 
 def main() -> None:
     frame = capture_frame("Capture: product + label in one shot (SPACE)")
-
     image = frame_to_pil(frame)
 
     print("\nRunning analysis — please wait...\n")
 
-    caption      = generate_caption(image)
+    # One call handles captioning + ripeness scoring, and returns both
+    # so we can still use the caption for product-name inference.
+    ripeness_score, caption = classify_ripeness(image)
+
     objects      = detect_objects(image)
     top_classes  = classify_image(image, top_k=5)
     raw_text     = extract_text(image)
     product_code = extract_product_code(raw_text)
 
     product_name = infer_product_name(caption, objects, top_classes)
-    ripeness_score = infer_ripeness_score(caption)
 
     report = format_analysis_report(
         caption, ripeness_score, objects, top_classes, raw_text, product_code
