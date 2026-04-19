@@ -19,6 +19,27 @@ from torchvision import models, transforms
 
 load_dotenv()
 
+# COCO class names (lowercase) that we treat as grocery / supermarket items for DETR.
+GROCERY_COCO_LABELS: frozenset[str] = frozenset({
+    "banana",
+    "apple",
+    "orange",
+    "broccoli",
+    "carrot",
+    "sandwich",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "bottle",
+    "wine glass",
+    "cup",
+    "bowl",
+    "fork",
+    "knife",
+    "spoon",
+})
+
 # ── Model setup (loaded once at startup) ────────────────────────────────────
 
 # 1. Image captioning (BLIP)
@@ -96,6 +117,16 @@ def detect_objects(image: Image.Image) -> list[dict]:
     return detector(image)
 
 
+def best_grocery_detection(objects: list[dict]) -> dict | None:
+    """Highest-confidence detection whose label is a grocery-related COCO class."""
+    grocery_hits = [
+        o for o in objects if str(o.get("label", "")).lower() in GROCERY_COCO_LABELS
+    ]
+    if not grocery_hits:
+        return None
+    return max(grocery_hits, key=lambda o: float(o.get("score", 0.0)))
+
+
 def classify_image(image: Image.Image, top_k: int = 5) -> list[tuple[str, float]]:
     """Return the top-k ImageNet class predictions using ResNet-50."""
     tensor = resnet_transform(image).unsqueeze(0)
@@ -134,14 +165,14 @@ def infer_product_name(
         "carrot",
     ]
 
+    primary = best_grocery_detection(objects)
+    if primary is not None:
+        raw_label = str(primary["label"]).strip()
+        return raw_label.title() if raw_label else "Unknown product"
+
     for item in grocery_items:
         if item in caption_lower:
             return item.title()
-
-    if objects:
-        label = objects[0]["label"].lower()
-        if label not in ["grocery product", "product", "item", "object", "food", "fruit"]:
-            return label.title()
 
     if top_classes:
         top_label = top_classes[0][0].lower()
@@ -175,54 +206,36 @@ def extract_text(image: Image.Image) -> str:
     return pytesseract.image_to_string(image, config=custom_config)
 
 
-PRODUCT_CODE_PATTERN = re.compile(
-    r"\b([A-Z]{2}[#\d]-\d{2}-[A-Z]\d-\d{3})\b"
+# Product code: ***-*#-*#-###  (* = alphanumeric, # = digit) after upper-casing OCR text.
+PRODUCT_CODE_STRICT = re.compile(r"\b([A-Z0-9]{3}-[A-Z0-9]\d-[A-Z0-9]\d-\d{3})\b")
+PRODUCT_CODE_FUZZY = re.compile(
+    r"\b([A-Z0-9]{3})[^A-Z0-9]+([A-Z0-9]\d)[^A-Z0-9]+([A-Z0-9]\d)[^A-Z0-9]+(\d{3})\b"
 )
+PRODUCT_CODE_COMPACT = re.compile(r"([A-Z0-9]{3})([A-Z0-9]\d)([A-Z0-9]\d)(\d{3})")
+
 
 def extract_product_code(raw_text: str) -> str | None:
     """
-    Search OCR output for a code matching XX#-##-X#-###.
+    Search OCR output for a code matching ***-*#-*#-###.
 
-    X  = any uppercase letter
-    #  = any digit
-    Pattern: [A-Z][A-Z][digit] - [digit][digit] - [A-Z][digit] - [digit][digit][digit]
-    Example: AB3-45-C6-789
+    *  = any letter or digit (A–Z / 0–9)
+    #  = digit only
+    Example: ABC-1D-2E-345, X7Z-A9-B0-123
     """
-    # Tesseract sometimes confuses O↔0, I↔1, S↔5 — normalise first
-    normalised = (
-        raw_text
-        .upper()
-        .replace("O", "0")   # letter O  → zero
-        .replace("I", "1")   # letter I  → one
-        .replace("S", "5")   # letter S  → five  (optional — remove if unwanted)
-    )
+    normalised = raw_text.upper()
 
-    # Strict pattern: XX#-##-X#-###
-    strict = re.compile(r"\b([A-Z]{2}\d-\d{2}-[A-Z]\d-\d{3})\b")
-    match = strict.search(normalised)
-    if match:
-        return match.group(1)
+    m = PRODUCT_CODE_STRICT.search(normalised)
+    if m:
+        return m.group(1)
 
-    # Also try a compacted form with spaces and separators removed.
+    m = PRODUCT_CODE_FUZZY.search(normalised)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}-{m.group(4)}"
+
     compact = re.sub(r"[\s\-\._|/\\]+", "", normalised)
-    compact_strict = re.compile(r"\b([A-Z]{2}\d{3}[A-Z]\d{4})\b")
-    match = compact_strict.search(compact)
-    if match:
-        code = match.group(1)
-        return f"{code[:3]}-{code[3:5]}-{code[5:7]}-{code[7:]}"
-
-    # Fuzzy fallback — accept common OCR noise characters (space/dot instead of dash)
-    fuzzy = re.compile(r"([A-Z]{2}\d)[^A-Z0-9](\d{2})[^A-Z0-9]([A-Z]\d)[^A-Z0-9](\d{3})")
-    match = fuzzy.search(normalised)
-    if match:
-        return "-".join(match.groups())
-
-    # If the OCR output contains the code in a longer string, search inside that too.
-    if match is None and compact:
-        submatch = compact_strict.search(compact)
-        if submatch:
-            code = submatch.group(1)
-            return f"{code[:3]}-{code[3:5]}-{code[5:7]}-{code[7:]}"
+    m = PRODUCT_CODE_COMPACT.search(compact)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}-{m.group(4)}"
 
     return None
 
@@ -261,16 +274,25 @@ def format_analysis_report(
     # ── Object detection ──────────────────────────────────────────
     lines.append("\n[4] DETECTED OBJECTS (DETR)")
     lines.append("-" * 40)
+    primary = best_grocery_detection(objects)
+    if primary is not None:
+        pct = round(float(primary["score"]) * 100, 1)
+        lines.append(
+            f"  ★ Grocery pick (highest confidence): {primary['label']}  ({pct:.1f}%)"
+        )
+    elif objects:
+        lines.append("  (No detections matched the grocery whitelist — see list below.)")
     if objects:
         seen: dict[str, float] = {}
         for obj in objects:
             label = obj["label"]
             score = round(obj["score"] * 100, 1)
-            # Keep highest-confidence instance per label
             if label not in seen or score > seen[label]:
                 seen[label] = score
+        primary_label = primary["label"] if primary is not None else None
         for label, score in sorted(seen.items(), key=lambda x: -x[1]):
-            lines.append(f"  • {label:<28} confidence: {score:.1f}%")
+            tag = "★ " if primary_label is not None and label == primary_label else "  "
+            lines.append(f"  {tag}{label:<26} confidence: {score:.1f}%")
     else:
         lines.append("  No objects detected.")
 
@@ -281,7 +303,7 @@ def format_analysis_report(
     lines.append(cleaned if cleaned else "  (no text detected)")
 
     # ── Product code ──────────────────────────────────────────────
-    lines.append("\n[6] PRODUCT CODE  (format: XX#-##-X#-###)")
+    lines.append("\n[6] PRODUCT CODE  (format: ***-*#-*#-###; * = alnum, # = digit)")
     lines.append("-" * 40)
     if product_code:
         lines.append(f"  ✔  Found: {product_code}")
