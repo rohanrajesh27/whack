@@ -288,7 +288,7 @@
           <section class="panel">
             <div class="panel__header">
               <h2>Create lot</h2>
-              <p class="muted">Represents a delivery batch with an expiry date.</p>
+              <p class="muted">Batch record: ST&lt;store&gt;-I&lt;item&gt;-B&lt;n&gt;-&lt;###&gt; plus shelf fields.</p>
             </div>
             <form class="form" method="post" action="{{ url_for('create_lot') }}">
               <input type="hidden" name="store_id" value="{{ store['id'] if store else '' }}" />
@@ -302,8 +302,12 @@
                 </select>
               </label>
               <label>
-                <div class="label">Lot ID</div>
-                <input name="lot_code" placeholder="e.g., A12, BAN-042" required />
+                <div class="label">Lot code (batch label)</div>
+                <input name="lot_code" placeholder="e.g. ST1-I4-B1-001" required />
+              </label>
+              <label>
+                <div class="label">Lot ID (optional, defaults to lot code)</div>
+                <input name="lot_id" placeholder="Same as lot code if empty" />
               </label>
               <div class="grid-2">
                 <label>
@@ -311,13 +315,51 @@
                   <input name="received_at" type="datetime-local" />
                 </label>
                 <label>
-                  <div class="label">Expires</div>
-                  <input name="expires_at" type="datetime-local" />
+                  <div class="label">Expiration</div>
+                  <input name="expiration" type="datetime-local" />
                 </label>
               </div>
               <label>
+                <div class="label">Expires (legacy alias)</div>
+                <input name="expires_at" type="datetime-local" />
+              </label>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Type</div>
+                  <input name="type" placeholder="e.g. Produce" />
+                </label>
+                <label>
+                  <div class="label">Weight (g)</div>
+                  <input name="weight_grams" inputmode="decimal" placeholder="980" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Temp (°C)</div>
+                  <input name="temperature_c" inputmode="decimal" placeholder="4.0" />
+                </label>
+                <label>
+                  <div class="label">Humidity (%)</div>
+                  <input name="humidity_pct" inputmode="decimal" placeholder="55" />
+                </label>
+              </div>
+              <div class="grid-2">
+                <label>
+                  <div class="label">Recommended price ($)</div>
+                  <input name="recommended_price" inputmode="decimal" placeholder="0.79" />
+                </label>
+                <label>
+                  <div class="label">Ripeness (1–5)</div>
+                  <input name="ripeness" inputmode="numeric" placeholder="3" />
+                </label>
+              </div>
+              <label>
+                <div class="label">Days left (optional; computed from expiration if empty)</div>
+                <input name="days_left" inputmode="numeric" placeholder="Auto" />
+              </label>
+              <label>
                 <div class="label">Quantity label</div>
-                <input name="quantity_label" placeholder="e.g., 12-count, 1 case, 1 unit" />
+                <input name="quantity_label" placeholder="e.g., 12-count, 1 case" />
               </label>
               <label>
                 <div class="label">Notes</div>

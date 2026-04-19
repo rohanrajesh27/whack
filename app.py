@@ -292,6 +292,18 @@ def parse_optional_float(value):
     return float(value)
 
 
+def parse_optional_int(value):
+    if value is None:
+        return None
+    value = value.strip()
+    if value == "":
+        return None
+    try:
+        return int(float(value))
+    except ValueError:
+        return None
+
+
 def parse_optional_datetime_local(value):
     if value is None:
         return None
@@ -827,18 +839,33 @@ def create_lot():
     store_id = request.form.get("store_id", type=int) or get_or_create_default_store()
     food_item_id = request.form.get("food_item_id", type=int)
     lot_code = (request.form.get("lot_code") or "").strip()
+    lot_id_label = (request.form.get("lot_id") or "").strip() or lot_code
     received_at = parse_optional_datetime_local(request.form.get("received_at")) or datetime.datetime.now().replace(microsecond=0)
     expires_at = parse_optional_datetime_local(request.form.get("expires_at"))
+    expiration = parse_optional_datetime_local(request.form.get("expiration")) or expires_at
     quantity_label = (request.form.get("quantity_label") or "").strip()
     notes = (request.form.get("notes") or "").strip()
+
+    batch_type = (request.form.get("type") or "").strip() or None
+    weight_grams = parse_optional_float(request.form.get("weight_grams"))
+    temperature_c = parse_optional_float(request.form.get("temperature_c"))
+    humidity_pct = parse_optional_float(request.form.get("humidity_pct"))
+    recommended_price = parse_optional_float(request.form.get("recommended_price"))
+    ripeness = parse_optional_int(request.form.get("ripeness"))
+    days_left_in = parse_optional_int(request.form.get("days_left"))
 
     if not food_item_id:
         flash("Select an item to create a lot.", "error")
         return redirect(url_for("dashboard", store_id=store_id))
 
     if not lot_code:
-        flash("Lot ID is required (e.g., A12, BAN-042).", "error")
+        flash("Lot code is required (e.g. ST1-I4-B1-001).", "error")
         return redirect(url_for("dashboard", store_id=store_id))
+
+    now = datetime.datetime.now().replace(microsecond=0)
+    days_left = days_left_in
+    if days_left is None and expiration is not None:
+        days_left = max(0, (expiration.date() - now.date()).days)
 
     db = get_mongo_db()
     lot_id = alloc_id("lots")
@@ -848,10 +875,19 @@ def create_lot():
                 "_id": lot_id,
                 "food_item_id": food_item_id,
                 "lot_code": lot_code,
+                "lot_id": lot_id_label,
+                "type": batch_type,
+                "weight_grams": weight_grams,
+                "temperature_c": temperature_c,
+                "humidity_pct": humidity_pct,
+                "recommended_price": recommended_price,
+                "ripeness": ripeness,
+                "expiration": expiration,
+                "expires_at": expiration or expires_at,
+                "days_left": days_left,
                 "received_at": received_at,
-                "expires_at": expires_at,
-                "quantity_label": quantity_label,
-                "notes": notes,
+                "quantity_label": quantity_label or None,
+                "notes": notes or None,
                 "created_at": now_ts(),
             }
         )

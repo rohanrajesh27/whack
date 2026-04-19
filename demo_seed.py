@@ -1,4 +1,16 @@
-"""Minimal demo catalog + one-store reset. Used by app seeding and scripts/reset_minimal_demo.py."""
+"""Demo data reset + banana-only pilot seed.
+
+MongoDB ``lots`` documents are **batches**. Each batch should carry (application schema):
+
+  type, weight_grams, temperature_c, humidity_pct, recommended_price,
+  ripeness, expiration, days_left, lot_id
+
+Relational / UI fields still used by the app: ``food_item_id``, ``lot_code`` (unique with
+item), ``received_at``, ``expires_at`` (kept equal to ``expiration`` for compatibility),
+``created_at``, optional ``quantity_label``, ``notes``.
+
+``lot_id`` is the human-readable batch label (same as ``lot_code`` when not set elsewhere).
+"""
 
 from __future__ import annotations
 
@@ -7,11 +19,7 @@ import datetime as dt
 from db_mongo import alloc_id, now_ts
 from mongo_db import get_mongo_db
 
-MINIMAL_CATALOG: list[tuple[str, str, str, float]] = [
-    ("Bananas", "Organic bunches", "Produce", 0.79),
-    ("Baby spinach", "5 oz clamshell", "Produce", 3.49),
-    ("Whole milk 1 gal", "Vitamin D", "Dairy", 4.29),
-]
+BANANA_PRODUCT: tuple[str, str, str, float] = ("Bananas", "Organic bunches", "Produce", 0.79)
 
 
 def _barcode(item_id: int) -> str:
@@ -23,7 +31,7 @@ def _image_url(item_id: int) -> str:
 
 
 def clear_business_collections(db) -> None:
-    """Remove store-scoped demo data and counters (users are kept)."""
+    """Remove store-scoped data and counters (users are kept)."""
     for name in (
         "food_items",
         "lots",
@@ -37,95 +45,124 @@ def clear_business_collections(db) -> None:
     db["_counters"].delete_many({})
 
 
-def _seed_items_for_store(db, store_id: int) -> None:
+def _batch_label(store_id: int, food_item_id: int, batch_index: int, suffix_three: int) -> str:
+    """Pattern ST#-I#-B#-### (### is a three-digit suffix, e.g. 001)."""
+    return f"ST{store_id}-I{food_item_id}-B{batch_index}-{suffix_three:03d}"
+
+
+def _insert_lot_with_batch_schema(
+    db,
+    *,
+    store_id: int,
+    food_item_id: int,
+    batch_index: int,
+    suffix_three: int,
+    now: dt.datetime,
+    weight_grams: float,
+    temperature_c: float,
+    humidity_pct: float,
+    recommended_price: float,
+    ripeness: int,
+    expiration: dt.datetime,
+    received_at: dt.datetime,
+) -> int:
+    days_left = max(0, (expiration.date() - now.date()).days)
+    label = _batch_label(store_id, food_item_id, batch_index, suffix_three)
+    lot_pk = alloc_id("lots")
+    db.lots.insert_one(
+        {
+            "_id": lot_pk,
+            "food_item_id": food_item_id,
+            "lot_code": label,
+            "lot_id": label,
+            "type": "Produce",
+            "weight_grams": weight_grams,
+            "temperature_c": temperature_c,
+            "humidity_pct": humidity_pct,
+            "recommended_price": round(float(recommended_price), 2),
+            "ripeness": int(ripeness),
+            "expiration": expiration,
+            "expires_at": expiration,
+            "days_left": int(days_left),
+            "received_at": received_at,
+            "quantity_label": f"Banana batch {batch_index}",
+            "notes": None,
+            "created_at": now_ts(),
+        }
+    )
+    db.sensor_readings.insert_one(
+        {
+            "_id": alloc_id("sensor_readings"),
+            "lot_id": lot_pk,
+            "weight_g": weight_grams,
+            "temp_c": temperature_c,
+            "humidity_rh": humidity_pct,
+            "voc_ppb": 0,
+            "recorded_at": now,
+            "created_at": now_ts(),
+        }
+    )
+    return lot_pk
+
+
+def _seed_banana_batches_for_store(db, store_id: int) -> None:
+    """One SKU (bananas) and exactly three batches with ST#-I#-B#-### labels."""
     now = dt.datetime.now().replace(microsecond=0)
-    food_item_ids: list[int] = []
+    name, desc, department, price = BANANA_PRODUCT
+    fid = alloc_id("food_items")
+    db.food_items.insert_one(
+        {
+            "_id": fid,
+            "name": name,
+            "description": desc,
+            "department": department,
+            "sku_number": None,
+            "barcode": _barcode(fid),
+            "image_url": _image_url(fid),
+            "price": price,
+            "store_id": store_id,
+            "created_at": now_ts(),
+        }
+    )
 
-    for name, desc, department, price in MINIMAL_CATALOG:
-        fid = alloc_id("food_items")
-        food_item_ids.append(fid)
-        db.food_items.insert_one(
-            {
-                "_id": fid,
-                "name": name,
-                "description": desc,
-                "department": department,
-                "sku_number": None,
-                "barcode": _barcode(fid),
-                "image_url": _image_url(fid),
-                "price": price,
-                "store_id": store_id,
-                "created_at": now_ts(),
-            }
+    # Three batches: different ripeness / weight / expiry (no filler SKUs).
+    specs = [
+        (1, 1, 980.0, 4.0, 54.0, round(price * 0.98, 2), 2, now + dt.timedelta(days=5), now - dt.timedelta(hours=20)),
+        (2, 2, 1020.0, 3.6, 56.0, round(price * 0.95, 2), 3, now + dt.timedelta(days=3), now - dt.timedelta(hours=14)),
+        (3, 3, 890.0, 5.1, 48.0, round(price * 0.88, 2), 4, now + dt.timedelta(days=1), now - dt.timedelta(hours=8)),
+    ]
+    for batch_index, suffix_three, w, t, h, rec, rip, exp, recv in specs:
+        _insert_lot_with_batch_schema(
+            db,
+            store_id=store_id,
+            food_item_id=fid,
+            batch_index=batch_index,
+            suffix_three=suffix_three,
+            now=now,
+            weight_grams=w,
+            temperature_c=t,
+            humidity_pct=h,
+            recommended_price=rec,
+            ripeness=rip,
+            expiration=exp,
+            received_at=recv,
         )
 
-        received = now - dt.timedelta(hours=18 + fid % 5)
-        expires = now + dt.timedelta(days=4 + (fid % 3))
-        days_left = max(0, (expires.date() - now.date()).days)
-        lot_code = f"LOT-{store_id}-{fid}"
-        lot_pk = alloc_id("lots")
-        weight_grams = 780.0 + (fid % 4) * 95.0
-        temperature_c = 3.2 + (fid % 3) * 0.6
-        humidity_pct = 52.0 - (fid % 3) * 2.5
-        ripeness = 2 + (fid % 4)
-        recommended_price = round(float(price) * (0.92 if days_left > 2 else 0.85), 2)
-
-        db.lots.insert_one(
-            {
-                "_id": lot_pk,
-                "food_item_id": fid,
-                "lot_code": lot_code,
-                "lot_id": lot_code,
-                "type": department,
-                "weight_grams": weight_grams,
-                "temperature_c": temperature_c,
-                "humidity_pct": humidity_pct,
-                "recommended_price": recommended_price,
-                "ripeness": ripeness,
-                "expiration": expires,
-                "expires_at": expires,
-                "days_left": days_left,
-                "received_at": received,
-                "quantity_label": "Primary batch",
-                "notes": "Seeded minimal demo batch",
-                "created_at": now_ts(),
-            }
-        )
-
-        rid = alloc_id("sensor_readings")
-        db.sensor_readings.insert_one(
-            {
-                "_id": rid,
-                "lot_id": lot_pk,
-                "weight_g": weight_grams,
-                "temp_c": temperature_c,
-                "humidity_rh": humidity_pct,
-                "voc_ppb": 400 + (fid % 5) * 35,
-                "recorded_at": now,
-                "created_at": now_ts(),
-            }
-        )
-
-    for fid in food_item_ids:
-        fi = db.food_items.find_one({"_id": fid})
-        base = float(fi.get("price") or 0) if fi else 0.0
-        if base <= 0:
-            continue
-        pr_id = alloc_id("pricing_rules")
-        db.pricing_rules.insert_one(
-            {
-                "_id": pr_id,
-                "food_item_id": fid,
-                "min_price": round(base * 0.35, 2),
-                "max_price": round(base * 1.15, 2),
-                "margin_floor_pct": 12.0,
-                "created_at": now_ts(),
-            }
-        )
+    pr_id = alloc_id("pricing_rules")
+    db.pricing_rules.insert_one(
+        {
+            "_id": pr_id,
+            "food_item_id": fid,
+            "min_price": round(float(price) * 0.35, 2),
+            "max_price": round(float(price) * 1.15, 2),
+            "margin_floor_pct": 12.0,
+            "created_at": now_ts(),
+        }
+    )
 
 
 def seed_minimal_demo(db=None) -> int:
-    """Clear business collections and create a single store with MINIMAL_CATALOG. Returns new store_id."""
+    """Clear business collections and create one store with three banana batches. Returns store_id."""
     db = db or get_mongo_db()
     clear_business_collections(db)
     sid = alloc_id("stores")
@@ -137,14 +174,14 @@ def seed_minimal_demo(db=None) -> int:
             "created_at": now_ts(),
         }
     )
-    _seed_items_for_store(db, sid)
+    _seed_banana_batches_for_store(db, sid)
     return sid
 
 
 def seed_store_catalog_if_empty(store_id: int) -> bool:
-    """If the store has no food_items yet, seed MINIMAL_CATALOG. Returns True if seeded."""
+    """If the store has no food_items yet, seed the banana pilot catalog."""
     db = get_mongo_db()
     if db.food_items.count_documents({"store_id": store_id}) > 0:
         return False
-    _seed_items_for_store(db, store_id)
+    _seed_banana_batches_for_store(db, store_id)
     return True
